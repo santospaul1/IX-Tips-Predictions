@@ -1,0 +1,50 @@
+{% extends "predict/base.html" %}
+{% load static %}
+
+{% block title %}Actual Match Results{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h3 class="mb-4">📊 Actual Match Results</h3>
+
+    <form method="get" class="row g-3 mb-4">
+        <div class="col-md-4">
+            {{ form.match_date.label_tag }} {{ form.match_date }}
+        </div>
+        <div class="col-md-4">
+            {{ form.competition.label_tag }} {{ form.competition }} 
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary">Fetch Results</button>
+        </div>
+    </form>
+
+    {% if results %}
+    <div class="table-responsive">
+        <table class="table table-bordered table-striped">
+            <thead class="thead-dark">
+                <tr>
+                    <th>Home Team</th>
+                    <th>Score</th>
+                    <th>Away Team</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for match in results %}
+                <tr>
+                    <td>{{ match.home_team }}</td>
+                    <td><strong>{{ match.actual_home_goals }} - {{ match.actual_away_goals }}</strong></td>
+                    <td>{{ match.away_team }}</td>
+                    
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        {% if form.is_bound %}
+            <div class="alert alert-warning">No results found for the selected date and competition.</div>
+        {% endif %}
+    {% endif %}
+</div>
+{% endblock %}

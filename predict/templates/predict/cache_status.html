@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cache Status</title>
+    <style>
+        table { border-collapse: collapse; width: 60%; margin: 30px auto; }
+        th, td { padding: 10px; border: 1px solid #ccc; text-align: center; }
+        th { background-color: #f4f4f4; }
+    </style>
+</head>
+<body>
+    <h2 style="text-align: center;">Training Data Cache Status</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Competition</th>
+                <th>Cached</th>
+                <th>Entries</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for status in cache_status %}
+                <tr>
+                    <td>{{ status.competition }}</td>
+                    <td>{{ status.cached }}</td>
+                    <td>{{ status.entries }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

@@ -1,0 +1,24 @@
+<h2>Odds Debug - ({{ competition }})</h2>
+<table border="1" cellpadding="6">
+  <tr>
+    <th>Match</th>
+    <th>Bookmakers Available</th>
+    <th>Home</th>
+    <th>Draw</th>
+    <th>Away</th>
+    <th>Over 2.5</th>
+    <th>Under 2.5</th>
+  </tr>
+
+  {% for game in games %}
+    <tr>
+      <td>{{ game.home }} vs {{ game.away }}</td>
+      <td>{{ game.bookmakers|join:", " }}</td>
+      <td>{{ game.odds.home|default:"-" }}</td>
+      <td>{{ game.odds.draw|default:"-" }}</td>
+      <td>{{ game.odds.away|default:"-" }}</td>
+      <td>{{ game.odds.over25|default:"-" }}</td>
+      <td>{{ game.odds.under25|default:"-" }}</td>
+    </tr>
+  {% endfor %}
+</table>

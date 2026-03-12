@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>View Predictions</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding: 2rem;
+        }
+        .form-inline label {
+            margin-right: 0.5rem;
+        }
+        table th, table td {
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Match Predictions</h2>
+
+    <form method="get" class="form-inline my-3">
+        <div class="form-group mr-2">
+            <label for="competition">Competition:</label>
+            <input type="text" name="competition" id="competition" class="form-control ml-2" value="{{ competition }}">
+        </div>
+        <div class="form-group mr-2">
+            <label for="date">Match Date:</label>
+            <input type="date" name="date" id="date" class="form-control ml-2" value="{{ date }}">
+        </div>
+        <button type="submit" class="btn btn-primary">Filter</button>
+        <a href="{% url 'view_predictions' %}" class="btn btn-secondary ml-2">Clear</a>
+    </form>
+
+    {% if predictions %}
+        <table class="table table-bordered table-striped">
+            <thead class="thead-dark">
+                <tr>
+                    <th>Date</th>
+                    <th>Competition</th>
+                    <th>Match</th>
+                    <th>Predicted</th>
+                    <th>Actual</th>
+                    <th>Accuracy</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for p in predictions %}
+                <tr>
+                    <td>{{ p.match_date }}</td>
+                    <td>{{ p.competition }}</td>
+                    <td>{{ p.home_team }} vs {{ p.away_team }}</td>
+                    <td>{{ p.predicted_home_goals }} - {{ p.predicted_away_goals }}</td>
+                    <td>
+                        {% if p.actual_home_goals is not None %}
+                            {{ p.actual_home_goals }} - {{ p.actual_away_goals }}
+                        {% else %}
+                            Not Available
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if p.is_accurate == True %}
+                            ✅
+                        {% elif p.is_accurate == False %}
+                            ❌
+                        {% else %}
+                            ⚠️ Pending
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <div class="alert alert-warning">No predictions found for the given filters.</div>
+    {% endif %}
+</div>
+</body>
+</html>

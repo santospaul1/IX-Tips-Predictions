@@ -1,0 +1,67 @@
+{% extends "predict/base.html" %}
+{% load static %}
+
+{% block title %}Live Predictions{% endblock %}
+
+{% block content %}
+
+  <title>Team Logos Preview</title>
+
+  <style>
+    .team-box {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 10px;
+      
+      display: flex;
+      align-items: center;
+    }
+    .team-logo {
+      width: 32px;
+      height: 32px;
+      object-fit: contain;
+      margin-right: 10px;
+    }
+    .comp-header {
+      display: flex;
+      align-items: center;
+      
+      padding: 10px 15px;
+      border-radius: 6px;
+      margin-top: 25px;
+    }
+    .comp-logo {
+      width: 36px;
+      height: 36px;
+      margin-right: 10px;
+      object-fit: contain;
+    }
+  </style>
+</head>
+
+<div class="container py-4">
+
+  <h3 class="mb-4">Team Logos by Competition</h3>
+
+  {% for group in preview_data %}
+    <div class="comp-header">
+      <img src="{{ group.logo }}" alt="{{ group.competition_code }}" class="comp-logo">
+      <strong>{{ group.competition }}</strong>
+    </div>
+    <div class="row mt-2">
+      {% for team in group.teams %}
+        <div class="col-md-4">
+          <div class="team-box">
+            <img src="{{ team.crest }}" class="team-logo" alt="{{ team.short }}">
+            <span>{{ team.short }}</span>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endfor %}
+
+</div>
+
+{% endblock content %}
+

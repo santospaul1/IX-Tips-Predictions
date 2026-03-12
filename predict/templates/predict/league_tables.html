@@ -1,0 +1,48 @@
+<div class="col-lg-2 col-md-3">
+      <div class="sidebar-right">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5>League Table</h5>
+          <form method="get" class="ms-2">
+            <select name="competition" class="form-select form-select-sm" onchange="this.form.submit()">
+              {% for code, name in competitions.items %}
+                <option value="{{ code }}" {% if selected_competition == code %}selected{% endif %}>{{ name }}</option>
+              {% endfor %}
+            </select>
+          </form>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-striped table-bordered" style="font-size: 0.88rem;">
+            <thead class="table-light">
+              <tr>
+                <th>#</th>
+                <th>Team</th>
+                <th>PT</th>
+                <th>P</th>
+                <th>W</th>
+                <th>D</th>
+                <th>L</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in league_table %}
+              <tr>
+                <td>{{ forloop.counter }}</td>
+                <td class="text-nowrap">
+                  <img src="{{ row.team.crest }}" class="team-logo me-1" alt="{{ row.team.shortName }}" style="width: 20px; height: 20px;">
+                  {{ row.team.shortName }}
+                </td>
+                <td>{{ row.points }}</td>
+                <td>{{ row.playedGames }}</td>
+                <td>{{ row.won }}</td>
+                <td>{{ row.draw }}</td>
+                <td>{{ row.lost }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>

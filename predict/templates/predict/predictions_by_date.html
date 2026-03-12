@@ -1,0 +1,47 @@
+<h2>Search Predictions by Date and Competition</h2>
+<a href="{% url 'results' %}">Results</a>
+<a href="{% url 'live_predictions' %}">🔮 Predict by Date</a>
+    <p style="color: red;">{{ error }}</p>
+    <a href="{% url 'train_model' %}">Train model now for this competition?</a>
+
+
+<form method="get">
+    <label for="date">Select Match Date:</label>
+    <input type="date" name="date" id="date" value="{{ selected_date }}">
+
+    <label for="competition">Select Competition:</label>
+    <select name="competition" id="competition">
+        <option value="">-- Select --</option>
+        {% for comp in competitions %}
+            <option value="{{ comp }}" {% if comp == selected_comp %}selected{% endif %}>{{ comp }}</option>
+        {% endfor %}
+    </select>
+
+    <button type="submit">Search</button>
+</form>
+
+{% if predictions %}
+    <h3>Predictions for {{ selected_date }} - {{ selected_comp }}</h3>
+    <table border="1">
+        <tr>
+            <th>Home</th>
+            <th>Away</th>
+            <th>Predicted Result</th>
+            <th>Actual Result</th>
+            <th>Score</th>
+            <th>Status</th>
+        </tr>
+        {% for match in predictions %}
+        <tr>
+            <td>{{ match.home_team }}</td>
+            <td>{{ match.away_team }}</td>
+            <td>{{ match.predicted_result }}</td>
+            <td>{{ match.actual_result }}</td>
+            <td>{{ match.predicted_score }}</td>
+            <td>{{ match.status }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+{% elif selected_date and selected_comp %}
+    <p>No predictions found for this selection.</p>
+{% endif %}

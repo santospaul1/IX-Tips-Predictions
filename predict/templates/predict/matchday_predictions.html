@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>IX-Tips Predictions</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            border: 1px solid #ccc;
+            text-align: center;
+        }
+        th {
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Upcoming Match Predictions</h1>
+    <a href="{% url 'results' %}">Results----</a>
+    {% if error %}
+    <p style="color: red;">{{ error }}</p>
+    <a href="{% url 'train_model' %}">Train model now for this competition?</a>
+{% endif %}
+
+
+
+    {% if matches %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Competition</th>
+                    <th>Match</th>
+                    <th>Predicted Result</th>
+                    <th>Predicted Score</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for match in matches %}
+                <tr>
+                    <td>{{ match.match_date }}</td>
+                    <td>{{ match.competition }}</td>
+                    <td>{{ match.home_team }} vs {{ match.away_team }}</td>
+                    <td>{{ match.predicted_result }}</td>
+                    <td>{{ match.predicted_home_goals }} - {{ match.predicted_away_goals }}</td>
+                    <td>{{ match.status }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No upcoming predictions available.</p>
+    {% endif %}
+</body>
+</html>

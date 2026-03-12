@@ -1,0 +1,17 @@
+{% if match.correct %}
+<tr class="correct">
+{% else %}
+<tr class="wrong">
+{% endif %}
+{% for match in matches %}
+    <td>{{ match.match_date }}</td>
+    <td>{{ match.competition }}</td>
+    <td>{{ match.home_team }} vs {{ match.away_team }}</td>
+    <td>{{ match.predicted_result }}</td>
+    <td>{{ match.actual_result }}</td>
+    <td>{{ match.predicted_score }}</td>
+    <td>{{ match.actual_score }}</td>
+    <td>{{ match.status }}</td>
+</tr>
+
+                {% endfor %}
