@@ -1,17 +1,23 @@
+# fly.toml app configuration file generated for ix-tips-predictions on 2026-05-24T10:28:57Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
 app = 'ix-tips-predictions'
 primary_region = 'jnb'
 console_command = '/code/manage.py shell'
 
 [build]
-  dockerfile = "Dockerfile"
 
 [deploy]
-  release_command = 'python manage.py collectstatic --noinput && python manage.py migrate --noinput'
+  release_command = 'python manage.py migrate --noinput'
+
+[env]
+  PORT = '8000'
 
 [processes]
-  app    = 'gunicorn --bind :8080 --workers 2 score_predictor.wsgi'
-  celery = 'celery -A score_predictor worker --loglevel=INFO --concurrency=2'
-  beat   = 'celery -A score_predictor beat --loglevel=INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler'
+  app = 'gunicorn --bind :8000 --workers 2 score_predictor.wsgi'
+  celery = 'celery -A score_predictor worker --loglevel=INFO'
 
 [http_service]
   internal_port = 8080
@@ -29,5 +35,5 @@ console_command = '/code/manage.py shell'
   processes = ['app', 'celery', 'beat']
 
 [[statics]]
-  guest_path = '/code/staticfiles'
+  guest_path = '/code/static'
   url_prefix = '/static/'
