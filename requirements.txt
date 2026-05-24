@@ -7,7 +7,7 @@ dj-database-url==3.1.2
 psycopg2-binary==2.9.12
 gunicorn==23.0.0
 whitenoise==6.9.0
-corsheaders
+django-cors-headers==4.7.0
 numpy==2.3.1
 pandas==2.3.0
 reportlab==4.4.2
