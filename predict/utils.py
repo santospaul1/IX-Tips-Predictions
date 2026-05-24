@@ -4,6 +4,7 @@
 import os
 import re
 import time
+import math
 import logging
 from collections import defaultdict
 from datetime import date, datetime, timedelta
@@ -32,6 +33,392 @@ from .constants import (
 HEADERS = {"X-Auth-Token": API_TOKEN}
 ODDS_PROVIDER = os.getenv("ODDS_PROVIDER", "the-odds-api")
 logger = logging.getLogger(__name__)
+
+
+def scoreline_predictions(predicted_home_goals, predicted_away_goals, max_goals=None, top_n=5):
+    home_rate = max(float(predicted_home_goals or 0), 0.15)
+    away_rate = max(float(predicted_away_goals or 0), 0.15)
+    if max_goals is None:
+        max_goals = max(5, int(math.ceil(max(home_rate, away_rate) + 3)))
+
+    def poisson_pmf(goals, lam):
+        return float(np.exp(-lam) * (lam ** goals) / math.factorial(goals))
+
+    def score_adjustment(home_goals, away_goals):
+        """
+        Light adjustment for known football tendencies:
+        - Draws (especially 0-0 and 1-1) are slightly more common than pure
+          Poisson suggests due to tactical/psychological factors.
+        - Very high scorelines are slightly less likely in practice.
+        Keep adjustments subtle so the model stays realistic.
+        """
+        total_expected = home_rate + away_rate
+        closeness = max(0.0, 1.0 - min(abs(home_rate - away_rate), 2.0) / 2.0)
+
+        if home_goals == 0 and away_goals == 0:
+            # Slight 0-0 boost only when expected goals are low and teams are close
+            low_goal_factor = max(0.0, 1.0 - total_expected / 3.0)
+            return 1.0 + (0.06 * closeness * low_goal_factor)
+        if home_goals == away_goals:
+            # Very slight draw boost
+            return 1.0 + (0.04 * closeness)
+        if home_goals + away_goals >= 6:
+            # Slight suppression of extreme scorelines
+            return 0.92
+        return 1.0
+
+    candidates = []
+    for home_goals in range(max_goals + 1):
+        for away_goals in range(max_goals + 1):
+            probability = poisson_pmf(home_goals, home_rate) * poisson_pmf(away_goals, away_rate)
+            probability *= score_adjustment(home_goals, away_goals)
+            candidates.append({
+                "score": f"{home_goals}-{away_goals}",
+                "home_goals": home_goals,
+                "away_goals": away_goals,
+                "probability": probability,
+            })
+
+    total_probability = sum(item["probability"] for item in candidates) or 1.0
+    for item in candidates:
+        item["probability"] = item["probability"] / total_probability
+
+    top_candidates = sorted(candidates, key=lambda item: item["probability"], reverse=True)[:top_n]
+    top_probability_total = sum(item["probability"] for item in top_candidates) or 1.0
+
+    return [
+        {
+            **item,
+            "percent": round(item["probability"] * 100, 1),
+            "top_share_percent": round((item["probability"] / top_probability_total) * 100, 1),
+        }
+        for item in top_candidates
+    ]
+
+
+def _clip_score(value, lower=0.0, upper=100.0):
+    return float(np.clip(value, lower, upper))
+
+
+def _market_odds_value(odds_obj, market):
+    if not odds_obj:
+        return None
+    market_map = {
+        "1": getattr(odds_obj, "home_win", None),
+        "X": getattr(odds_obj, "draw", None),
+        "2": getattr(odds_obj, "away_win", None),
+        "GG": getattr(odds_obj, "btts_yes", None),
+        "NG": getattr(odds_obj, "btts_no", None),
+        "Over 2.5": getattr(odds_obj, "over_2_5", None),
+        "Under 2.5": getattr(odds_obj, "under_2_5", None),
+    }
+    return market_map.get(market)
+
+
+def score_top_pick_markets(match_prediction, model_context):
+    total_goals = float((match_prediction.predicted_home_goals or 0) + (match_prediction.predicted_away_goals or 0))
+    goal_margin = float((match_prediction.predicted_home_goals or 0) - (match_prediction.predicted_away_goals or 0))
+    features = build_fixture_features(
+        match_prediction.home_team,
+        match_prediction.away_team,
+        model_context,
+    ).iloc[0]
+
+    elo_home_prob = float(features.get("elo_home_win_prob", 0.5))
+    form_gap = float(features.get("form_gap", 0.0))
+    goal_balance_gap = float(features.get("goal_balance_gap", 0.0))
+    h2h_goal_diff = float(features.get("h2h_goal_diff", 0.0))
+    h2h_total_goals = float(features.get("h2h_total_goals", 2.4))
+    home_recent_scored = float(features.get("home_recent_scored", 1.2))
+    away_recent_scored = float(features.get("away_recent_scored", 1.0))
+    home_recent_conceded = float(features.get("home_recent_conceded", 1.0))
+    away_recent_conceded = float(features.get("away_recent_conceded", 1.0))
+    home_clean_sheet_rate = float(features.get("home_clean_sheet_rate", 0.25))
+    away_clean_sheet_rate = float(features.get("away_clean_sheet_rate", 0.25))
+    home_fail_to_score_rate = float(features.get("home_fail_to_score_rate", 0.2))
+    away_fail_to_score_rate = float(features.get("away_fail_to_score_rate", 0.2))
+    rest_gap = float(features.get("rest_gap", 0.0))
+    h2h_match_count = float(features.get("h2h_match_count", 0.0))
+
+    goal_environment = (
+        0.45 * total_goals
+        + 0.30 * h2h_total_goals
+        + 0.15 * (home_recent_scored + away_recent_scored)
+        + 0.10 * (away_recent_conceded + home_recent_conceded)
+    )
+    goal_suppression = (
+        0.45 * (home_clean_sheet_rate + away_clean_sheet_rate)
+        + 0.35 * (home_fail_to_score_rate + away_fail_to_score_rate)
+        + 0.20 * max(0.0, 2.4 - h2h_total_goals)
+    )
+    both_score_signal = (
+        0.35 * min(home_recent_scored, away_recent_scored)
+        + 0.20 * (2.0 - home_clean_sheet_rate - away_clean_sheet_rate)
+        + 0.20 * (2.0 - home_fail_to_score_rate - away_fail_to_score_rate)
+        + 0.15 * min(total_goals, 3.5)
+        + 0.10 * min(h2h_total_goals, 3.5)
+    )
+    stronger_team_attack = max(
+        (match_prediction.predicted_home_goals or 0),
+        (match_prediction.predicted_away_goals or 0),
+    )
+    home_attack_push = (
+        0.55 * (match_prediction.predicted_home_goals or 0)
+        + 0.20 * home_recent_scored
+        + 0.15 * away_recent_conceded
+        + 0.10 * max(0.0, elo_home_prob - 0.5) * 2
+    )
+    away_attack_push = (
+        0.55 * (match_prediction.predicted_away_goals or 0)
+        + 0.20 * away_recent_scored
+        + 0.15 * home_recent_conceded
+        + 0.10 * max(0.0, (1.0 - elo_home_prob) - 0.5) * 2
+    )
+
+    markets = {
+        "1": _clip_score(
+            26
+            + 18 * max(0.0, goal_margin)
+            + 18 * max(0.0, elo_home_prob - 0.5) * 2
+            + 4 * max(0.0, form_gap)
+            + 3 * max(0.0, goal_balance_gap)
+            + 1.5 * max(0.0, h2h_goal_diff)
+            + 0.8 * max(0.0, rest_gap)
+            + (10 if goal_margin >= 1.5 else 0)
+        ),
+        "2": _clip_score(
+            26
+            + 18 * max(0.0, -goal_margin)
+            + 18 * max(0.0, (1.0 - elo_home_prob) - 0.5) * 2
+            + 4 * max(0.0, -form_gap)
+            + 3 * max(0.0, -goal_balance_gap)
+            + 1.5 * max(0.0, -h2h_goal_diff)
+            + 0.8 * max(0.0, -rest_gap)
+            + (10 if goal_margin <= -1.5 else 0)
+        ),
+        "X": _clip_score(
+            24
+            + 18 * max(0.0, 0.75 - abs(goal_margin))
+            + 10 * max(0.0, 0.12 - abs(elo_home_prob - 0.5))
+            + 6 * max(0.0, 0.8 - abs(form_gap))
+            + 4 * max(0.0, 0.8 - abs(goal_balance_gap))
+            + 4 * max(0.0, 0.8 - abs(total_goals - 2.2))
+        ),
+        "Over 2.5": _clip_score(
+            28
+            + 20 * max(0.0, goal_environment - 2.15)
+            + 12 * max(0.0, both_score_signal - 1.35)
+            - 10 * goal_suppression
+            + (14 if total_goals >= 3.0 else 0)
+        ),
+        "Under 2.5": _clip_score(
+            28
+            + 18 * max(0.0, 2.75 - goal_environment)
+            + 14 * goal_suppression
+            + 10 * max(0.0, 0.9 - abs(goal_margin))
+            + (14 if total_goals <= 2.0 else 0)
+        ),
+        "GG": _clip_score(
+            26
+            + 18 * max(0.0, both_score_signal - 1.2)
+            + 10 * max(0.0, goal_environment - 2.3)
+            - 10 * (home_clean_sheet_rate + away_clean_sheet_rate)
+            + (10 if (match_prediction.predicted_home_goals or 0) >= 1 and (match_prediction.predicted_away_goals or 0) >= 1 else 0)
+        ),
+        "NG": _clip_score(
+            26
+            + 14 * goal_suppression
+            + 10 * max(0.0, 2.5 - goal_environment)
+            + 10 * max(0.0, 1.0 - both_score_signal)
+            + (10 if (match_prediction.predicted_home_goals or 0) == 0 or (match_prediction.predicted_away_goals or 0) == 0 else 0)
+        ),
+        "Any Team Over 1.5": _clip_score(
+            28
+            + 18 * max(0.0, stronger_team_attack - 1.35)
+            + 10 * max(0.0, goal_environment - 2.25)
+            + 8 * max(0.0, max(home_recent_scored, away_recent_scored) - 1.3)
+            + (14 if stronger_team_attack >= 2 else 0)
+        ),
+        "Home Win Either Half": _clip_score(
+            26
+            + 16 * max(0.0, goal_margin)
+            + 14 * max(0.0, elo_home_prob - 0.5) * 2
+            + 8 * max(0.0, home_recent_scored - 1.2)
+            + 6 * max(0.0, away_recent_conceded - 1.0)
+            + (12 if (match_prediction.predicted_home_goals or 0) >= 2 else 0)
+        ),
+        "Away Win Either Half": _clip_score(
+            26
+            + 16 * max(0.0, -goal_margin)
+            + 14 * max(0.0, (1.0 - elo_home_prob) - 0.5) * 2
+            + 8 * max(0.0, away_recent_scored - 1.1)
+            + 6 * max(0.0, home_recent_conceded - 1.0)
+            + (12 if (match_prediction.predicted_away_goals or 0) >= 2 else 0)
+        ),
+        "Home Team Over 1.0": _clip_score(
+            26
+            + 20 * max(0.0, home_attack_push - 1.2)
+            + 8 * max(0.0, goal_environment - 2.1)
+            + (16 if (match_prediction.predicted_home_goals or 0) >= 2 else 0)
+            + (6 if (match_prediction.predicted_home_goals or 0) == 1 else 0)
+        ),
+        "Away Team Over 1.0": _clip_score(
+            26
+            + 20 * max(0.0, away_attack_push - 1.15)
+            + 8 * max(0.0, goal_environment - 2.1)
+            + (16 if (match_prediction.predicted_away_goals or 0) >= 2 else 0)
+            + (6 if (match_prediction.predicted_away_goals or 0) == 1 else 0)
+        ),
+    }
+
+    if h2h_match_count < 2:
+        markets["1"] = _clip_score(markets["1"] - 2)
+        markets["2"] = _clip_score(markets["2"] - 2)
+        markets["X"] = _clip_score(markets["X"] - 1)
+
+    preferred_order = {
+        "1": 4,
+        "2": 4,
+        "Over 2.5": 3,
+        "Under 2.5": 3,
+        "GG": 2,
+        "NG": 2,
+        "Any Team Over 1.5": 2,
+        "Home Win Either Half": 2,
+        "Away Win Either Half": 2,
+        "Home Team Over 1.0": 2,
+        "Away Team Over 1.0": 2,
+        "X": 1,
+    }
+    ranked = sorted(markets.items(), key=lambda item: (item[1], preferred_order.get(item[0], 0)), reverse=True)
+    return ranked, dict(features)
+
+
+def implied_probability_from_odds(odds_value):
+    try:
+        odds_value = float(odds_value)
+    except (TypeError, ValueError):
+        return None
+    if odds_value <= 1:
+        return None
+    return 100.0 / odds_value
+
+
+def market_edge(confidence, odds_value):
+    implied = implied_probability_from_odds(odds_value)
+    try:
+        confidence = float(confidence)
+    except (TypeError, ValueError):
+        return implied, None
+    if implied is None:
+        return None, None
+    return implied, confidence - implied
+
+
+def explain_pick_reasons(market, features, match_prediction):
+    features = features or {}
+    reasons = []
+    total_goals = float((match_prediction.predicted_home_goals or 0) + (match_prediction.predicted_away_goals or 0))
+    goal_margin = float((match_prediction.predicted_home_goals or 0) - (match_prediction.predicted_away_goals or 0))
+    elo_gap = float(features.get("elo_gap", 0.0))
+    form_gap = float(features.get("form_gap", 0.0))
+    h2h_total_goals = float(features.get("h2h_total_goals", 2.4))
+    home_clean_sheet_rate = float(features.get("home_clean_sheet_rate", 0.25))
+    away_clean_sheet_rate = float(features.get("away_clean_sheet_rate", 0.25))
+    home_fail_to_score_rate = float(features.get("home_fail_to_score_rate", 0.2))
+    away_fail_to_score_rate = float(features.get("away_fail_to_score_rate", 0.2))
+
+    if market == "1":
+        if goal_margin >= 1:
+            reasons.append(f"Projected margin {match_prediction.predicted_home_goals}-{match_prediction.predicted_away_goals}")
+        if form_gap > 0.4:
+            reasons.append("Home side in better recent form")
+        if elo_gap > 40:
+            reasons.append("Strong Elo advantage at home")
+    elif market == "2":
+        if goal_margin <= -1:
+            reasons.append(f"Projected margin {match_prediction.predicted_home_goals}-{match_prediction.predicted_away_goals}")
+        if form_gap < -0.4:
+            reasons.append("Away side in better recent form")
+        if elo_gap < -40:
+            reasons.append("Away team has clear Elo edge")
+    elif market == "X":
+        if abs(goal_margin) <= 0.5:
+            reasons.append("Projected as a very even match")
+        if abs(form_gap) <= 0.4:
+            reasons.append("Recent form is closely balanced")
+        if abs(elo_gap) <= 35:
+            reasons.append("Elo gap is minimal")
+    elif market == "Over 2.5":
+        if total_goals >= 3:
+            reasons.append(f"Projected total goals {total_goals:.0f}")
+        if h2h_total_goals >= 2.8:
+            reasons.append("Head-to-head trend is goal-friendly")
+        if home_fail_to_score_rate < 0.25 and away_fail_to_score_rate < 0.25:
+            reasons.append("Both teams usually find a goal")
+    elif market == "Under 2.5":
+        if total_goals <= 2:
+            reasons.append(f"Projected total goals {total_goals:.0f}")
+        if home_clean_sheet_rate + away_clean_sheet_rate >= 0.65:
+            reasons.append("Strong clean-sheet profile")
+        if home_fail_to_score_rate + away_fail_to_score_rate >= 0.45:
+            reasons.append("One side often fails to score")
+    elif market == "GG":
+        if (match_prediction.predicted_home_goals or 0) >= 1 and (match_prediction.predicted_away_goals or 0) >= 1:
+            reasons.append("Both teams projected to score")
+        if home_fail_to_score_rate < 0.25 and away_fail_to_score_rate < 0.25:
+            reasons.append("Low fail-to-score rates")
+        if h2h_total_goals >= 2.7:
+            reasons.append("H2H trend supports goals")
+    elif market == "NG":
+        if (match_prediction.predicted_home_goals or 0) == 0 or (match_prediction.predicted_away_goals or 0) == 0:
+            reasons.append("One side projected to blank")
+        if home_clean_sheet_rate + away_clean_sheet_rate >= 0.55:
+            reasons.append("Clean-sheet rates are elevated")
+        if home_fail_to_score_rate + away_fail_to_score_rate >= 0.45:
+            reasons.append("Fail-to-score trend is meaningful")
+    elif market == "Any Team Over 1.5":
+        if max((match_prediction.predicted_home_goals or 0), (match_prediction.predicted_away_goals or 0)) >= 2:
+            reasons.append("One team is projected for 2+ goals")
+        if max(
+            float(features.get("home_recent_scored", 0)),
+            float(features.get("away_recent_scored", 0)),
+        ) >= 1.6:
+            reasons.append("At least one attack is in strong scoring form")
+        if total_goals >= 3:
+            reasons.append("Overall goal projection is healthy")
+    elif market == "Home Win Either Half":
+        if goal_margin >= 1:
+            reasons.append("Home side projected to control the match")
+        if elo_gap > 40:
+            reasons.append("Home team has a clear strength edge")
+        if float(features.get("home_recent_scored", 0)) >= 1.5:
+            reasons.append("Home attack is producing consistently")
+    elif market == "Away Win Either Half":
+        if goal_margin <= -1:
+            reasons.append("Away side projected to take key spells")
+        if elo_gap < -40:
+            reasons.append("Away team has a clear strength edge")
+        if float(features.get("away_recent_scored", 0)) >= 1.4:
+            reasons.append("Away attack is producing consistently")
+    elif market == "Home Team Over 1.0":
+        if (match_prediction.predicted_home_goals or 0) >= 2:
+            reasons.append("Home team projected for 2+ goals")
+        elif (match_prediction.predicted_home_goals or 0) == 1:
+            reasons.append("One home goal still protects with a refund")
+        if float(features.get("away_recent_conceded", 0)) >= 1.2:
+            reasons.append("Away defence has been conceding regularly")
+    elif market == "Away Team Over 1.0":
+        if (match_prediction.predicted_away_goals or 0) >= 2:
+            reasons.append("Away team projected for 2+ goals")
+        elif (match_prediction.predicted_away_goals or 0) == 1:
+            reasons.append("One away goal still protects with a refund")
+        if float(features.get("home_recent_conceded", 0)) >= 1.2:
+            reasons.append("Home defence has been conceding regularly")
+
+    if not reasons:
+        reasons.append("Backed by projected score and recent form")
+    return reasons[:3]
 
 
 def _normalize_team_lookup_value(name):
@@ -158,6 +545,19 @@ def fetch_competition_matches(competition_id, date_from=None, date_to=None):
     return json_data.get("matches", []) if json_data else []
 
 
+def fetch_competition_scorers(competition_code):
+    cache_key = f"competition_scorers::{competition_code}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    url = f"{BASE_URL}/competitions/{competition_code}/scorers"
+    json_data = _get_json(url, headers=HEADERS, retries=2)
+    scorers = json_data.get("scorers", []) if json_data else []
+    cache.set(cache_key, scorers, timeout=60 * 60 * 12)
+    return scorers
+
+
 def fetch_training_data(competition_code, seasons=None):
     """
     Collect finished matches for a competition across seasons.
@@ -271,6 +671,32 @@ def find_next_available_match_date(api_key, competition_code, start_date, days_a
         if matches:
             return check_date, matches
     return None, []
+
+
+def find_upcoming_match_dates(fetch_fn, api_key, competition_code, start_date=None, days_ahead=7):
+    """
+    Return every upcoming date within the search window that has fixtures for a competition.
+    Useful for predicting a whole gameweek instead of only the first available date.
+    """
+    if not callable(fetch_fn):
+        raise ValueError("fetch_fn must be callable")
+
+    base_date = start_date
+    if isinstance(base_date, str):
+        base_date = datetime.strptime(base_date, "%Y-%m-%d").date()
+    elif base_date is None:
+        base_date = datetime.today().date()
+
+    dates = []
+    for i in range(days_ahead):
+        check_date = (base_date + timedelta(days=i)).isoformat()
+        try:
+            matches = fetch_fn(api_key or API_TOKEN, competition_code, check_date)
+        except Exception:
+            continue
+        if matches:
+            dates.append(check_date)
+    return dates
 
 
 # ---------- process / preprocess helpers ----------
@@ -907,6 +1333,19 @@ def train_competition_models(training_df, lookback=8):
     return model_home, model_away, model_context
 
 
+def get_team_recent_form(team_name, competition_code, limit=5):
+    """Return list of recent result letters oldest→newest, e.g. ['W','D','L','W','W']."""
+    cached_bundle = cache.get(model_cache_key(competition_code))
+    if not cached_bundle or len(cached_bundle) < 3:
+        return []
+    team_profiles = cached_bundle[2].get("team_profiles", {})
+    profile = team_profiles.get(team_name)
+    if not profile:
+        return []
+    points = profile.get("overall_points", [])[-limit:]
+    return ["W" if p == 3 else "D" if p == 1 else "L" for p in points]
+
+
 def get_or_train_model_bundle(competition_code, force_refresh=False):
     cache_key = model_cache_key(competition_code)
     if not force_refresh:
@@ -1217,7 +1656,10 @@ def attach_odds_to_predictions(match_predictions, odds_list):
         for mp in mps:
             # create or update MatchOdds
             if MatchOdds:
-                odds_obj, _ = MatchOdds.objects.get_or_create(match=mp)
+                odds_obj, _ = MatchOdds.objects.get_or_create(
+                    match=mp,
+                    defaults={"market_sources": {}},
+                )
             else:
                 odds_obj = None
 
@@ -1254,94 +1696,258 @@ def attach_odds_to_predictions(match_predictions, odds_list):
 
             if odds_obj:
                 odds_obj.bookmaker = bookmaker.get("title", "") if bookmaker else None
+                if odds_obj.market_sources is None:
+                    odds_obj.market_sources = {}
                 odds_obj.save()
                 updated += 1
 
     return updated
 
 
-# ---------- top picks helpers (unchanged from your code, but included) ----------
-def get_top_predictions(limit=10):
+def _collect_top_pick_candidates(rank_limit=4):
     today = date.today()
     matches = MatchPrediction.objects.select_related("odds").filter(match_date__gte=today).order_by("match_date")
 
-    picks_by_date = {}
-    tip_priority = {"Over 2.5": 3, "GG": 2, "1": 1, "2": 1, "X": 0}
+    picks_by_date_candidates = defaultdict(list)
+    model_bundles = {}
 
     for m in matches:
-        tips = []
-        meta_home = get_team_metadata(m.home_team)
-        meta_away = get_team_metadata(m.away_team)
+        competition_code = m.competition
+        if competition_code not in model_bundles:
+            model_bundles[competition_code] = get_or_train_model_bundle(competition_code)
 
-        margin = m.predicted_home_goals - m.predicted_away_goals
+        bundle = model_bundles.get(competition_code)
+        model_context = bundle[2] if bundle and len(bundle) == 3 else {}
+        ranked_markets, _ = score_top_pick_markets(m, model_context)
+        if not ranked_markets:
+            continue
 
-        # --- Model-based tips ---
-        if abs(margin) >= 1.5:
-            if margin > 0:
-                tips.append(("1", min(abs(margin) * 10, 40)))  # Home win
-            else:
-                tips.append(("2", min(abs(margin) * 10, 40)))  # Away win
-        elif abs(margin) <= 0.4:
-            tips.append(("X", 20))  # Draw
+        try:
+            odds_obj = m.odds
+        except MatchOdds.DoesNotExist:
+            odds_obj = None
 
-        if m.predicted_home_goals >= 1 and m.predicted_away_goals >= 1:
-            tips.append(("GG", 25))  # Both teams to score
-
-        total_goals = m.predicted_home_goals + m.predicted_away_goals
-        if total_goals > 2.5:
-            tips.append(("Over 2.5", min((total_goals - 2.5) * 12, 30)))
-
-        if tips:
-            # ✅ Force "Over 2.5" tip if total goals ≥ 3
-            if total_goals >= 3:
-                best_tip = ("Over 2.5", 100)
-            else:
-                best_tip = sorted(
-                    tips,
-                    key=lambda x: (x[1], tip_priority.get(x[0], 0)),
-                    reverse=True
-                )[0]
-
-            odds_value = None
-            try:
-                odds_obj = m.odds
-            except MatchOdds.DoesNotExist:
-                odds_obj = None
-            if odds_obj:
-                if best_tip[0] == "1":
-                    odds_value = odds_obj.home_win
-                elif best_tip[0] == "2":
-                    odds_value = odds_obj.away_win
-                elif best_tip[0] == "X":
-                    odds_value = odds_obj.draw
-                elif best_tip[0] == "Over 2.5":
-                    odds_value = odds_obj.over_2_5
-                elif best_tip[0] == "GG":
-                    odds_value = odds_obj.btts_yes
-
-            match_day = m.match_date.strftime("%Y-%m-%d")
-            picks_by_date.setdefault(match_day, []).append({
-                "home_team": meta_home.get("shortName", m.home_team),
-                "away_team": meta_away.get("shortName", m.away_team),
-                "tip": best_tip[0],
-                "confidence": f"{best_tip[1]:.0f}",
+        match_day = m.match_date.strftime("%Y-%m-%d")
+        for rank_index, (market, confidence) in enumerate(ranked_markets[:rank_limit]):
+            picks_by_date_candidates[match_day].append({
+                "home_team": m.home_team,
+                "away_team": m.away_team,
+                "tip": market,
+                "confidence": f"{confidence:.0f}",
+                "confidence_value": float(confidence),
                 "match_date": match_day,
-                "odds": odds_value  # ✅ attach bookmaker odds
+                "odds": _market_odds_value(odds_obj, market),
+                "rank_index": rank_index,
             })
 
-    # --- Sort and limit ---
-    for date_str in picks_by_date:
-        picks_by_date[date_str] = sorted(
-            picks_by_date[date_str],
-            key=lambda x: int(x["confidence"]),
-            reverse=True
-        )[:limit]
+    return picks_by_date_candidates
+
+
+# ---------- top picks helpers ----------
+def get_top_predictions(limit=10, variant=1):
+    picks_by_date_candidates = _collect_top_pick_candidates(rank_limit=4)
+    market_caps = {
+        "1": 3,
+        "2": 3,
+        "X": 2,
+        "Over 2.5": 3,
+        "Under 2.5": 2,
+        "GG": 2,
+        "NG": 2,
+        "Any Team Over 1.5": 2,
+        "Home Win Either Half": 2,
+        "Away Win Either Half": 2,
+        "Home Team Over 1.0": 2,
+        "Away Team Over 1.0": 2,
+    }
+
+    picks_by_date = {}
+    for date_str, candidates in picks_by_date_candidates.items():
+        selected = []
+        used_fixtures = set()
+        market_counts = defaultdict(int)
+
+        ordered_candidates = sorted(
+            candidates,
+            key=lambda item: (item["confidence_value"] - (item["rank_index"] * 4), -item["rank_index"]),
+            reverse=True,
+        )
+        preferred_rank_floor = max(0, int(variant) - 1)
+        variant_candidates = [item for item in ordered_candidates if item["rank_index"] >= preferred_rank_floor]
+        if not variant_candidates:
+            variant_candidates = ordered_candidates
+
+        for candidate in variant_candidates:
+            fixture_key = (candidate["home_team"], candidate["away_team"])
+            market = candidate["tip"]
+            if fixture_key in used_fixtures:
+                continue
+            if market_counts[market] >= market_caps.get(market, limit):
+                continue
+            selected.append(candidate)
+            used_fixtures.add(fixture_key)
+            market_counts[market] += 1
+            if len(selected) >= limit:
+                break
+
+        if len(selected) < min(limit, len({(c["home_team"], c["away_team"]) for c in candidates})):
+            for candidate in ordered_candidates:
+                fixture_key = (candidate["home_team"], candidate["away_team"])
+                if fixture_key in used_fixtures:
+                    continue
+                selected.append(candidate)
+                used_fixtures.add(fixture_key)
+                if len(selected) >= limit:
+                    break
+
+        picks_by_date[date_str] = [
+            {
+                "home_team": item["home_team"],
+                "away_team": item["away_team"],
+                "tip": item["tip"],
+                "confidence": f"{item['confidence_value']:.0f}",
+                "match_date": item["match_date"],
+                "odds": item["odds"],
+            }
+            for item in sorted(selected, key=lambda x: x["confidence_value"], reverse=True)
+        ]
 
     return picks_by_date
 
 
+def get_running_bet_predictions(limit=10):
+    base_predictions = get_top_predictions(limit=limit, variant=1)
+    aggregated_candidates = []
 
-def store_top_pick_for_date(predictions_by_date):
+    for date_str, picks in base_predictions.items():
+        for pick in picks:
+            aggregated_candidates.append({
+                "home_team": pick["home_team"],
+                "away_team": pick["away_team"],
+                "tip": pick["tip"],
+                "confidence": pick["confidence"],
+                "confidence_value": float(pick.get("confidence") or 0),
+                "match_date": pick["match_date"],
+                "odds": pick.get("odds"),
+            })
+
+    aggregated_candidates.sort(
+        key=lambda item: (item["confidence_value"], item["match_date"]),
+        reverse=True,
+    )
+    selected = aggregated_candidates[:limit]
+
+    grouped = defaultdict(list)
+    for pick in selected:
+        grouped[pick["match_date"]].append({
+            "home_team": pick["home_team"],
+            "away_team": pick["away_team"],
+            "tip": pick["tip"],
+            "confidence": pick["confidence"],
+            "match_date": pick["match_date"],
+            "odds": pick.get("odds"),
+        })
+
+    return dict(grouped)
+
+
+def get_mshipi_predictions(limit=20):
+    market_targets = [
+        "1",
+        "2",
+        "X",
+        "GG",
+        "NG",
+        "Over 2.5",
+        "Under 2.5",
+        "Any Team Over 1.5",
+        "Home Win Either Half",
+        "Away Win Either Half",
+        "Home Team Over 1.0",
+        "Away Team Over 1.0",
+    ]
+    market_caps = {
+        "1": 3,
+        "2": 3,
+        "X": 2,
+        "GG": 2,
+        "NG": 2,
+        "Over 2.5": 3,
+        "Under 2.5": 3,
+        "Any Team Over 1.5": 3,
+        "Home Win Either Half": 2,
+        "Away Win Either Half": 2,
+        "Home Team Over 1.0": 2,
+        "Away Team Over 1.0": 2,
+    }
+    candidates_by_date = _collect_top_pick_candidates(rank_limit=6)
+    aggregated_candidates = []
+
+    for date_str, day_candidates in candidates_by_date.items():
+        for candidate in day_candidates:
+            aggregated_candidates.append({
+                **candidate,
+                "match_date": date_str,
+                "confidence_value": float(candidate.get("confidence_value") or candidate.get("confidence") or 0),
+            })
+
+    ordered_candidates = sorted(
+        aggregated_candidates,
+        key=lambda item: (item["confidence_value"] - (item["rank_index"] * 3), item["match_date"]),
+        reverse=True,
+    )
+
+    selected = []
+    selected_keys = set()
+    market_counts = defaultdict(int)
+
+    for market in market_targets:
+        for candidate in ordered_candidates:
+            key = (candidate["match_date"], candidate["home_team"], candidate["away_team"], candidate["tip"])
+            if candidate["tip"] != market or key in selected_keys:
+                continue
+            selected.append(candidate)
+            selected_keys.add(key)
+            market_counts[market] += 1
+            break
+
+    for candidate in ordered_candidates:
+        if len(selected) >= limit:
+            break
+        key = (candidate["match_date"], candidate["home_team"], candidate["away_team"], candidate["tip"])
+        if key in selected_keys:
+            continue
+        market = candidate["tip"]
+        if market_counts[market] >= market_caps.get(market, 2):
+            continue
+        selected.append(candidate)
+        selected_keys.add(key)
+        market_counts[market] += 1
+
+    grouped = defaultdict(list)
+    for candidate in sorted(selected[:limit], key=lambda item: item["confidence_value"], reverse=True):
+        grouped[candidate["match_date"]].append({
+            "home_team": candidate["home_team"],
+            "away_team": candidate["away_team"],
+            "tip": candidate["tip"],
+            "confidence": f"{candidate['confidence_value']:.0f}",
+            "match_date": candidate["match_date"],
+            "odds": candidate.get("odds"),
+        })
+
+    return dict(grouped)
+
+
+def get_top_predictions_for_variant(limit=10, variant="1"):
+    variant = str(variant)
+    if variant == "3":
+        return get_running_bet_predictions(limit=limit)
+    if variant == "4":
+        return get_mshipi_predictions(limit=max(limit, 20))
+    return get_top_predictions(limit=limit, variant=int(variant))
+
+
+def store_top_pick_for_date(predictions_by_date, variant="1"):
     if TopPick is None:
         return 0
     all_picks = []
@@ -1350,18 +1956,20 @@ def store_top_pick_for_date(predictions_by_date):
             match_date = datetime.strptime(date_str, "%Y-%m-%d").date()
         except Exception:
             continue
-        TopPick.objects.filter(match_date=match_date).delete()
+        TopPick.objects.filter(match_date=match_date, variant=variant).delete()
         for p in picks:
             all_picks.append(TopPick(
                 match_date=match_date,
                 home_team=p["home_team"],
                 away_team=p["away_team"],
+                variant=variant,
                 tip=p["tip"],
                 confidence=p.get("confidence", 0),
                 odds=p.get("odds"),
             ))
     if all_picks:
         TopPick.objects.bulk_create(all_picks)
+        cache.delete("top_pick_slip_summary_v1")
         return len(all_picks)
     return 0
 
@@ -1372,7 +1980,21 @@ def update_actuals_for_top_picks(picks_qs):
     """
     if TopPick is None:
         return 0
-    to_update = picks_qs.filter(actual_tip__isnull=True)
+    to_update = list(picks_qs.filter(actual_tip__isnull=True))
+    if not to_update:
+        return 0
+
+    prediction_rows = MatchPrediction.objects.filter(
+        match_date__in=sorted({pick.match_date for pick in to_update})
+    )
+    prediction_rows_by_date = defaultdict(list)
+    for prediction_row in prediction_rows:
+        prediction_rows_by_date[prediction_row.match_date].append((
+            _team_name_aliases(prediction_row.home_team),
+            _team_name_aliases(prediction_row.away_team),
+            prediction_row,
+        ))
+
     updated = 0
     for pick in to_update:
         pick_home_aliases = _team_name_aliases(pick.home_team)
@@ -1382,14 +2004,10 @@ def update_actuals_for_top_picks(picks_qs):
             continue
 
         # try to match the corresponding MatchPrediction
-        match_qs = MatchPrediction.objects.filter(match_date=pick.match_date)
         found = None
-        for mp in match_qs:
-            if (
-                _team_name_aliases(mp.home_team) & pick_home_aliases
-                and _team_name_aliases(mp.away_team) & pick_away_aliases
-            ):
-                found = mp
+        for home_aliases, away_aliases, prediction_row in prediction_rows_by_date.get(pick.match_date, []):
+            if home_aliases & pick_home_aliases and away_aliases & pick_away_aliases:
+                found = prediction_row
                 break
         if not found:
             continue
@@ -1397,12 +2015,62 @@ def update_actuals_for_top_picks(picks_qs):
             continue
         home_g = found.actual_home_goals
         away_g = found.actual_away_goals
+        ht_home_g = found.actual_ht_home_goals
+        ht_away_g = found.actual_ht_away_goals
         result_tip = "1" if home_g > away_g else "2" if home_g < away_g else "X"
         gg = home_g >= 1 and away_g >= 1
         over_2_5 = (home_g + away_g) > 2.5
-        actual_tip = "GG" if pick.tip == "GG" and gg else "Over 2.5" if pick.tip == "Over 2.5" and over_2_5 else result_tip
+        under_2_5 = not over_2_5
+        nogg = not gg
+        any_team_over_1_5 = max(home_g, away_g) >= 2
+        home_team_over_1_0 = home_g >= 2
+        away_team_over_1_0 = away_g >= 2
+        home_team_over_1_0_push = home_g == 1
+        away_team_over_1_0_push = away_g == 1
+        home_second_half = (home_g - ht_home_g) if ht_home_g is not None else None
+        away_second_half = (away_g - ht_away_g) if ht_away_g is not None else None
+        home_win_either_half = (
+            (ht_home_g is not None and ht_away_g is not None and ht_home_g > ht_away_g)
+            or (
+                home_second_half is not None
+                and away_second_half is not None
+                and home_second_half > away_second_half
+            )
+        )
+        away_win_either_half = (
+            (ht_home_g is not None and ht_away_g is not None and ht_away_g > ht_home_g)
+            or (
+                home_second_half is not None
+                and away_second_half is not None
+                and away_second_half > home_second_half
+            )
+        )
+        if pick.tip == "GG" and gg:
+            actual_tip = "GG"
+        elif pick.tip == "NG" and nogg:
+            actual_tip = "NG"
+        elif pick.tip == "Over 2.5" and over_2_5:
+            actual_tip = "Over 2.5"
+        elif pick.tip == "Under 2.5" and under_2_5:
+            actual_tip = "Under 2.5"
+        elif pick.tip == "Any Team Over 1.5" and any_team_over_1_5:
+            actual_tip = "Any Team Over 1.5"
+        elif pick.tip == "Home Win Either Half" and home_win_either_half:
+            actual_tip = "Home Win Either Half"
+        elif pick.tip == "Away Win Either Half" and away_win_either_half:
+            actual_tip = "Away Win Either Half"
+        elif pick.tip == "Home Team Over 1.0" and home_team_over_1_0:
+            actual_tip = "Home Team Over 1.0"
+        elif pick.tip == "Away Team Over 1.0" and away_team_over_1_0:
+            actual_tip = "Away Team Over 1.0"
+        elif pick.tip == "Home Team Over 1.0" and home_team_over_1_0_push:
+            actual_tip = "Refund"
+        elif pick.tip == "Away Team Over 1.0" and away_team_over_1_0_push:
+            actual_tip = "Refund"
+        else:
+            actual_tip = result_tip
         pick.actual_tip = actual_tip
-        pick.is_correct = (pick.tip == actual_tip)
+        pick.is_correct = None if actual_tip == "Refund" else (pick.tip == actual_tip)
         pick.save()
         updated += 1
     return updated

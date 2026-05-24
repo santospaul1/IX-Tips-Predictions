@@ -1,65 +1,170 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>IX-Tips Predictions</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-        th, td {
-            padding: 12px;
-            border: 1px solid #ccc;
-            text-align: center;
-        }
-        th {
-            background-color: #f0f0f0;
-        }
-    </style>
-</head>
-<body>
-    <h1>Upcoming Match Predictions</h1>
-    <a href="{% url 'results' %}">Results----</a>
-    {% if error %}
-    <p style="color: red;">{{ error }}</p>
-    <a href="{% url 'train_model' %}">Train model now for this competition?</a>
+{% extends "predict/base_prediction_page.html" %}
+
+{% block page_title %}IX-Tips - Matchday Predictions{% endblock %}
+
+{% block page_styles %}
+{% include "predict/partials/prediction_shell_styles.html" %}
+{% include "predict/partials/prediction_component_styles.html" %}
+.predictions-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--text-primary);
+}
+.predictions-table th {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: var(--table-header-bg, #f8fafc);
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+.predictions-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.88rem;
+  vertical-align: middle;
+}
+.predictions-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.predictions-table tbody tr {
+  transition: background 0.15s ease;
+}
+.predictions-table tbody tr:hover {
+  background: var(--hover-bg);
+}
+.match-fixture {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.competition-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: var(--hover-bg);
+  border-radius: 6px;
+  padding: 2px 7px;
+  margin-top: 3px;
+}
+.result-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: var(--info-bg);
+  border: 1px solid var(--info-border);
+  color: var(--info-text);
+}
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  background: var(--hover-bg);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+.score-text {
+  font-family: 'Inter', monospace;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  letter-spacing: 0.04em;
+}
+.error-banner {
+  padding: 12px 16px;
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  color: var(--error-text);
+  border-radius: 12px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.table-wrapper {
+  overflow-x: auto;
+  border-radius: 18px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+}
+@media (max-width: 767px) {
+  .predictions-table th, .predictions-table td { padding: 9px 10px; font-size: 0.82rem; }
+  .hide-mobile { display: none; }
+}
+{% endblock %}
+
+{% block sidebar %}
+{% include "predict/partials/prediction_menu_block.html" with active_page="matchday" %}
+{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <div>
+    <h1 class="section-title">Matchday Predictions</h1>
+    <div class="section-subtitle">Upcoming match predictions based on the trained model.</div>
+  </div>
+  <div class="action-row">
+    <a href="{% url 'results' %}" class="pill-link">View Results</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block page_content %}
+{% if error %}
+<div class="error-banner">
+  <span>{{ error }}</span>
+  <a href="{% url 'train_model' %}" class="pill-link" style="font-size:0.8rem;">Train model</a>
+</div>
 {% endif %}
 
-
-
-    {% if matches %}
-        <table>
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Competition</th>
-                    <th>Match</th>
-                    <th>Predicted Result</th>
-                    <th>Predicted Score</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for match in matches %}
-                <tr>
-                    <td>{{ match.match_date }}</td>
-                    <td>{{ match.competition }}</td>
-                    <td>{{ match.home_team }} vs {{ match.away_team }}</td>
-                    <td>{{ match.predicted_result }}</td>
-                    <td>{{ match.predicted_home_goals }} - {{ match.predicted_away_goals }}</td>
-                    <td>{{ match.status }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    {% else %}
-        <p>No upcoming predictions available.</p>
-    {% endif %}
-</body>
-</html>
+{% if matches %}
+<div class="table-wrapper">
+  <table class="predictions-table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Fixture</th>
+        <th class="hide-mobile">Competition</th>
+        <th>Prediction</th>
+        <th>Score</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for match in matches %}
+      <tr>
+        <td style="white-space:nowrap; color: var(--text-secondary); font-size:0.82rem;">{{ match.match_date }}</td>
+        <td>
+          <div class="match-fixture">{{ match.home_team }} <span style="color:var(--text-secondary);font-weight:400;">vs</span> {{ match.away_team }}</div>
+          <div class="competition-badge d-none d-md-none d-sm-inline-block">{{ match.competition }}</div>
+        </td>
+        <td class="hide-mobile"><span class="competition-badge">{{ match.competition }}</span></td>
+        <td><span class="result-pill">{{ match.predicted_result }}</span></td>
+        <td><span class="score-text">{{ match.predicted_home_goals }} – {{ match.predicted_away_goals }}</span></td>
+        <td><span class="status-chip">{{ match.status }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+  {% if not error %}
+  <div style="padding: 32px; text-align: center; color: var(--text-secondary); background: var(--card-bg); border: 1px dashed var(--border-color); border-radius: 18px;">
+    No upcoming predictions available.
+  </div>
+  {% endif %}
+{% endif %}
+{% endblock %}

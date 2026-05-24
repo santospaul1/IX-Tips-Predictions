@@ -1,0 +1,258 @@
+{% extends "predict/base_prediction_dashboard.html" %}
+
+{% block page_title %}IX-Tips - Correct Score{% endblock %}
+
+{% block extra_head_links %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css"/>
+{% endblock %}
+
+{% block page_styles %}
+{% include "predict/partials/prediction_shell_styles.html" %}
+{% include "predict/partials/prediction_component_styles.html" %}
+.fixture-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 22px;
+  box-shadow: 0 18px 40px var(--shadow);
+  backdrop-filter: blur(10px);
+  padding: 22px;
+  position: relative;
+  overflow: hidden;
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+.date-input { max-width: 220px; }
+.fixture-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: linear-gradient(180deg, #2563eb 0%, #7c3aed 100%);
+}
+.fixture-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.best-score-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: var(--info-bg);
+  border: 1px solid var(--info-border);
+  color: var(--info-text);
+  font-weight: 800;
+  font-size: 1rem;
+}
+.match-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+.team-block {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.team-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.vs-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--hover-bg);
+  color: var(--text-secondary);
+  font-weight: 800;
+  text-transform: uppercase;
+  flex: 0 0 auto;
+}
+.scoreline-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+.scoreline-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 50px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--hover-bg);
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.scoreline-chip.primary {
+  background: var(--light-blue);
+  color: var(--blue, #1d4ed8);
+}
+.scoreline-chip.correct {
+  background: rgba(22,163,74,0.15);
+  color: #16a34a;
+  border: 1px solid rgba(22,163,74,0.35);
+}
+.team-logo { width: 28px; height: 28px; object-fit: contain; }
+.meta-line { color: var(--text-secondary); font-size: 0.92rem; }
+.competition-line {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+}
+.actual-result-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.actual-result-badge.won { background: rgba(22,163,74,0.12); color: #16a34a; border: 1px solid rgba(22,163,74,0.3); }
+.actual-result-badge.lost { background: rgba(220,38,38,0.1); color: #dc2626; border: 1px solid rgba(220,38,38,0.25); }
+/* Stats strip */
+.cs-stats-strip {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.cs-stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+.cs-stat-chip .chip-val { color: var(--blue, #3C91E6); font-size: 1rem; }
+.cs-stat-chip.green .chip-val { color: #16a34a; }
+@media (max-width: 767px) {
+  .fixture-card { border-radius: 18px; padding: 14px; }
+  .team-name { font-size: 0.96rem; }
+  .best-score-pill { width: 100%; justify-content: center; }
+  .date-input { max-width: 100%; width: 100%; }
+  .fixture-top { flex-direction: column; }
+  .match-row { gap: 10px; }
+}
+{% endblock %}
+
+{% block left_sidebar %}
+{% include "predict/partials/prediction_menu_block.html" with active_page="correct_score" %}
+{% endblock %}
+
+{% block right_sidebar %}{% include "predict/league_tables.html" %}{% endblock %}
+
+{% block page_header %}
+{% include "predict/partials/prediction_page_header.html" with header_class="mb-4" header_title="Correct Score" header_subtitle="Top scoreline projections with quick export support." header_actions_template="predict/partials/correct_score_header_actions.html" header_actions_class="action-row" %}
+{% endblock %}
+
+{% block page_content %}
+
+{% if score_stats.finished %}
+<div class="cs-stats-strip">
+  <div class="cs-stat-chip">
+    <span>Settled</span>
+    <span class="chip-val">{{ score_stats.finished }}</span>
+  </div>
+  <div class="cs-stat-chip green">
+    <span>Top Pick ✓</span>
+    <span class="chip-val">{{ score_stats.top_correct }}</span>
+    {% if score_stats.top_accuracy %}<span style="color:var(--text-secondary);font-size:0.72rem;">({{ score_stats.top_accuracy }}%)</span>{% endif %}
+  </div>
+  <div class="cs-stat-chip green">
+    <span>Any Pick ✓</span>
+    <span class="chip-val">{{ score_stats.any_correct }}</span>
+    {% if score_stats.any_accuracy %}<span style="color:var(--text-secondary);font-size:0.72rem;">({{ score_stats.any_accuracy }}%)</span>{% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% if predictions %}
+  <div class="d-grid gap-3">
+    {% for match in predictions %}
+    <div class="fixture-card">
+      <div class="fixture-top">
+        <div>
+          <div class="meta-line">{{ match.match_date }} {% if match.match_time %}{{ match.match_time }}{% endif %}</div>
+          <div class="competition-line">{{ match.competition }}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          {% if match.is_finished and match.actual_score %}
+            {% if match.top_correct %}
+              <span class="actual-result-badge won"><i class='bx bx-check-circle'></i>Won · {{ match.actual_score }}</span>
+            {% elif match.any_correct %}
+              <span class="actual-result-badge won"><i class='bx bx-check-circle'></i>In picks · {{ match.actual_score }}</span>
+            {% else %}
+              <span class="actual-result-badge lost"><i class='bx bx-x-circle'></i>{{ match.actual_score }}</span>
+            {% endif %}
+          {% endif %}
+          <div class="best-score-pill">Best: {{ match.top_score.score }}</div>
+        </div>
+      </div>
+      <div class="match-row">
+        <div class="team-block">
+          {% if match.home_logo %}<img src="{{ match.home_logo }}" class="team-logo" alt="{{ match.home_team }}">{% endif %}
+          <span class="team-name">{{ match.home_team }}</span>
+        </div>
+        <span class="vs-chip">vs</span>
+        <div class="team-block">
+          {% if match.away_logo %}<img src="{{ match.away_logo }}" class="team-logo" alt="{{ match.away_team }}">{% endif %}
+          <span class="team-name">{{ match.away_team }}</span>
+        </div>
+      </div>
+      <div class="mt-3">
+        <a href="{{ match.detail_url }}" class="pill-link">View Match</a>
+      </div>
+      <div class="scoreline-list">
+        <span class="scoreline-chip {% if match.top_correct %}correct{% else %}primary{% endif %}">{{ match.top_score.score }}</span>
+        {% for scoreline in match.other_scores %}
+          <span class="scoreline-chip {% if match.is_finished and match.actual_score == scoreline.score %}correct{% endif %}">{{ scoreline.score }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div style="padding: 32px; text-align: center; color: var(--text-secondary); background: var(--card-bg); border: 1px dashed var(--border-color); border-radius: 18px;">
+    No correct score predictions available for the selected date.
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  flatpickr("#date-picker", {
+    dateFormat: "Y-m-d",
+    altInput: true,
+    altFormat: "F j, Y",
+    defaultDate: "{{ selected_date }}",
+    onChange: function () {
+      this.input.form.submit();
+    }
+  });
+});
+</script>
+{% endblock %}

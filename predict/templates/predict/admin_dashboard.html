@@ -1,127 +1,146 @@
 {% extends "predict/base.html" %}
 {% load static %}
 
-{% block title %}Live Predictions{% endblock %}
+{% block title %}Admin Dashboard - IX-Tips{% endblock %}
 
 {% block content %}
 <div class="dashboard-page admin-dashboard-page">
+
   <div class="head-title">
     <div class="left">
-      <h1>Admin Task Dashboard</h1>
+      <h1>Admin Dashboard</h1>
       <ul class="breadcrumb">
-        <li>
-          <a href="#">Dashboard</a>
-        </li>
+        <li><a href="#">Dashboard</a></li>
         <li><i class='bx bx-chevron-right'></i></li>
-        <li>
-          <a class="active" href="#">Tasks</a>
-        </li>
+        <li><a class="active" href="#">Tasks</a></li>
       </ul>
     </div>
-    <a href="#" class="btn-download">
-      <i class='bx bxs-cloud-download bx-fade-down-hover'></i>
-      <span class="text">Get PDF</span>
-    </a>
   </div>
 
   <div class="table-data admin-table-grid">
 
-  <!-- Scheduled Tasks -->
-  <div class="order table-card mb-5">
-    <div class="head">
-      <h3>Scheduled Tasks</h3>
+    <!-- ── Top Picks Admin ── -->
+    <div class="order table-card mb-4">
+      <div class="admin-card-head">
+        <h3><i class='bx bxs-star' style="color:#f59e0b; margin-right:6px;"></i>Regenerate Top Picks</h3>
+      </div>
+      <form method="POST" action="{% url 'regenerate_top_picks' %}" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        {% csrf_token %}
+        <input type="date" name="match_date" value="{{ today|date:'Y-m-d' }}" min="{{ today|date:'Y-m-d' }}" class="admin-form-input" style="width:100%; max-width:260px;">
+        <select name="variant" class="admin-form-input" style="width:100%; max-width:260px;">
+          <option value="1">Sure 1</option>
+          <option value="2">Sure 2</option>
+          <option value="3">Running Bet</option>
+          <option value="4">Mshipi</option>
+        </select>
+        <button type="submit" class="admin-btn primary">
+          <i class='bx bx-refresh'></i> Regenerate
+        </button>
+      </form>
     </div>
-    <div class="table-scroll">
-    <table class="dashboard-table">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Task</th>
-          <th>Enabled</th>
-          <th>Schedule</th>
-          <th>Last Run</th>
-          <th>Last Triggered</th>
-          <th>Run Now</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for task in tasks %}
-        <tr>
-          <td data-label="Name" class="cell-strong">{{ task.name }}</td>
-          <td data-label="Task" class="cell-code">
-            <span class="task-label">{{ task.task_label }}</span>
-            <span class="task-path">{{ task.task }}</span>
-          </td>
-          <td data-label="Enabled">
-            {% if task.enabled %}
-            <span class="status completed">Enabled</span>
-            {% else %}
-            <span class="status pending">Disabled</span>
-            {% endif %}
-          </td>
-          <td data-label="Schedule">{% if task.interval %}Interval{% elif task.crontab %}Crontab{% else %}None{% endif %}</td>
-          <td data-label="Last Run">{{ task.last_run_at|default:"Never" }}</td>
-          <td data-label="Last Triggered">{{ task.last_triggered|default:"Never" }}</td>
-          <td data-label="Run Now" class="cell-actions">
-            <form method="POST" action="{% url 'trigger_task_now' %}" class="inline-form">
-              {% csrf_token %}
-              <input type="hidden" name="task_path" value="{{ task.task }}">
-              <button type="submit" class="btn btn-primary btn-sm">Run</button>
-            </form>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    </div>
-  </div>
 
-  <!-- Cached Training Data -->
-  <div class="order table-card">
-    <div class="head">
-      <h3>Cached Training Data</h3>
+    <!-- ── Scheduled Tasks ── -->
+    <div class="order table-card mb-4">
+      <div class="admin-card-head">
+        <h3><i class='bx bx-time-five' style="color:#3C91E6; margin-right:6px;"></i>Scheduled Tasks</h3>
+        <span style="font-size:0.72rem; color:var(--text-secondary);">{{ tasks|length }} task{{ tasks|length|pluralize }}</span>
+      </div>
+      <div class="table-scroll">
+        <table class="dashboard-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Task</th>
+              <th>Status</th>
+              <th>Schedule</th>
+              <th>Last Run</th>
+              <th>Last Triggered</th>
+              <th>Run Now</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for task in tasks %}
+            <tr>
+              <td class="cell-strong">{{ task.name }}</td>
+              <td class="cell-code">
+                <span class="task-label">{{ task.task_label }}</span>
+                <span class="task-path">{{ task.task }}</span>
+              </td>
+              <td>
+                {% if task.enabled %}
+                <span class="status-badge enabled">Enabled</span>
+                {% else %}
+                <span class="status-badge disabled">Disabled</span>
+                {% endif %}
+              </td>
+              <td>{% if task.interval %}Interval{% elif task.crontab %}Crontab{% else %}—{% endif %}</td>
+              <td style="font-size:0.78rem; color:var(--text-secondary);">{{ task.last_run_at|default:"Never" }}</td>
+              <td style="font-size:0.78rem; color:var(--text-secondary);">{{ task.last_triggered|default:"Never" }}</td>
+              <td class="cell-actions">
+                <form method="POST" action="{% url 'trigger_task_now' %}" class="inline-form">
+                  {% csrf_token %}
+                  <input type="hidden" name="task_path" value="{{ task.task }}">
+                  <button type="submit" class="admin-btn primary"><i class='bx bx-play'></i> Run</button>
+                </form>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7" style="text-align:center; color:var(--text-secondary); padding:24px;">No scheduled tasks found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
-    <div class="table-scroll">
-    <table class="dashboard-table">
-      <thead>
-        <tr>
-          <th>Competition</th>
-          <th>Cached?</th>
-          <th>Entries</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for cache in cache_info %}
-        <tr>
-          <td data-label="Competition" class="cell-strong">{{ cache.competition }}</td>
-          <td data-label="Cached?">
-            {% if cache.cached %}
-            <span class="status completed">Yes</span>
-            {% else %}
-            <span class="status pending">No</span>
-            {% endif %}
-          </td>
-          <td data-label="Entries">{{ cache.entries }}</td>
-          <td data-label="Actions" class="cell-actions">
-            <form method="POST" action="{% url 'refresh_cache_now' %}" class="inline-form">
-              {% csrf_token %}
-              <input type="hidden" name="competition" value="{{ cache.competition }}">
-              <button type="submit" class="btn btn-info btn-sm">Refresh</button>
-            </form>
-            <form method="POST" action="{% url 'clear_cache_now' %}" class="inline-form">
-              {% csrf_token %}
-              <input type="hidden" name="competition" value="{{ cache.competition }}">
-              <button type="submit" class="btn btn-danger btn-sm">Clear</button>
-            </form>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    </div>
-  </div>
 
-</div>
+    <!-- ── Cached Training Data ── -->
+    <div class="order table-card">
+      <div class="admin-card-head">
+        <h3><i class='bx bx-data' style="color:#10b981; margin-right:6px;"></i>Cached Training Data</h3>
+        <span style="font-size:0.72rem; color:var(--text-secondary);">{{ cache_info|length }} competition{{ cache_info|length|pluralize }}</span>
+      </div>
+      <div class="table-scroll">
+        <table class="dashboard-table">
+          <thead>
+            <tr>
+              <th>Competition</th>
+              <th>Cached</th>
+              <th>Entries</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for cache in cache_info %}
+            <tr>
+              <td class="cell-strong">{{ cache.competition }}</td>
+              <td>
+                {% if cache.cached %}
+                <span class="status-badge cached">Yes</span>
+                {% else %}
+                <span class="status-badge missing">No</span>
+                {% endif %}
+              </td>
+              <td>{{ cache.entries }}</td>
+              <td class="cell-actions" style="display:flex; gap:6px; flex-wrap:wrap;">
+                <form method="POST" action="{% url 'refresh_cache_now' %}" class="inline-form">
+                  {% csrf_token %}
+                  <input type="hidden" name="competition" value="{{ cache.competition }}">
+                  <button type="submit" class="admin-btn success"><i class='bx bx-refresh'></i> Refresh</button>
+                </form>
+                <form method="POST" action="{% url 'clear_cache_now' %}" class="inline-form">
+                  {% csrf_token %}
+                  <input type="hidden" name="competition" value="{{ cache.competition }}">
+                  <button type="submit" class="admin-btn danger"><i class='bx bx-trash'></i> Clear</button>
+                </form>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" style="text-align:center; color:var(--text-secondary); padding:24px;">No cache data found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
 </div>
 {% endblock %}

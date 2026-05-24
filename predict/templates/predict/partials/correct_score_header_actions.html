@@ -1,0 +1,5 @@
+<form method="get" class="d-flex gap-2">
+  <input type="text" id="date-picker" name="match_date" class="form-control date-input" readonly value="{{ selected_date }}">
+</form>
+<a class="pill-link" href="{% url 'export_correct_score' format='csv' %}?match_date={{ selected_date }}">Export CSV</a>
+<a class="pill-link" href="{% url 'export_correct_score' format='pdf' %}?match_date={{ selected_date }}">Export PDF</a>

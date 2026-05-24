@@ -1,0 +1,8 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "python manage.py migrate --run-syncdb && python manage.py collectstatic --noinput && gunicorn score_predictor.wsgi --log-file - --workers 2 --timeout 120"
+healthcheckPath = "/"
+healthcheckTimeout = 60
+restartPolicyType = "on_failure"

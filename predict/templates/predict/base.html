@@ -8,13 +8,158 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <style>
+    /* ── Admin dark-mode variable overrides ── */
+    body.dark {
+      --card-bg: rgba(26, 26, 46, 0.96);
+      --border-color: rgba(42, 42, 62, 0.9);
+      --shadow: rgba(0,0,0,0.35);
+      --text-primary: #f0f0f0;
+      --text-secondary: #b0b0c8;
+      --hover-bg: #252540;
+      --input-bg: #1a1a2e;
+      --table-header-bg: rgba(20,20,40,0.8);
+      --success-bg: rgba(4,120,87,0.18); --success-border: rgba(134,239,172,0.4); --success-text: #86efac;
+      --error-bg: rgba(185,28,28,0.18);  --error-border: rgba(252,165,165,0.4);  --error-text: #fca5a5;
+      --warning-bg: rgba(180,83,9,0.2);  --warning-border: rgba(252,211,77,0.4); --warning-text: #fcd34d;
+    }
+    body {
+      --success-bg: linear-gradient(135deg,#dcfce7 0%,#effcf5 100%); --success-border: #86efac; --success-text: #047857;
+      --error-bg: linear-gradient(135deg,#fee2e2 0%,#fff1f2 100%);   --error-border: #fca5a5;  --error-text: #b91c1c;
+      --warning-bg: linear-gradient(135deg,#fef9c3 0%,#fffbeb 100%); --warning-border: #fcd34d; --warning-text: #b45309;
+    }
+
+    /* Dark mode: admin sidebar & navbar */
+    body.dark #sidebar {
+      background: var(--card-bg);
+      border-right: 1px solid var(--border-color);
+    }
+    body.dark #sidebar .brand,
+    body.dark #sidebar .side-menu li a { color: var(--text-secondary); }
+    body.dark #sidebar .side-menu.top li.active a { color: var(--blue, #3C91E6); }
+    body.dark #sidebar .side-menu li a:hover { color: var(--text-primary); background: var(--hover-bg); }
+    body.dark #content nav {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border-color);
+    }
+    body.dark #content nav form .form-input input {
+      background: var(--input-bg);
+      color: var(--text-primary);
+      border-color: var(--border-color);
+    }
+    body.dark #content nav form .form-input input::placeholder { color: var(--text-secondary); }
+    body.dark #content nav form .form-input button { background: var(--hover-bg); color: var(--text-secondary); }
+    body.dark #content main { background: transparent; }
+    body.dark .admin-dashboard-page .table-card {
+      background: var(--card-bg);
+      border-color: var(--border-color);
+    }
+    body.dark .admin-dashboard-page .dashboard-table th { color: var(--text-secondary); border-color: var(--border-color); }
+    body.dark .admin-dashboard-page .dashboard-table td { color: var(--text-primary); border-color: var(--border-color); }
+    body.dark .admin-dashboard-page .dashboard-table tbody tr:hover { background: var(--hover-bg); }
+    body.dark .admin-form-input {
+      background: var(--input-bg) !important;
+      color: var(--text-primary) !important;
+      border-color: var(--border-color) !important;
+    }
+    body.dark .head-title h1 { color: var(--text-primary); }
+    body.dark .breadcrumb li a { color: var(--text-secondary); }
+    body.dark .breadcrumb li a.active { color: var(--blue, #3C91E6); }
+    body.dark #sidebar-toggle {
+      background: var(--card-bg);
+      border-color: var(--border-color);
+      color: var(--text-secondary);
+    }
+
+    /* Admin form inputs */
+    .admin-form-input {
+      height: 40px;
+      padding: 0 12px;
+      border: 1px solid var(--border-color, #d1d5db);
+      border-radius: 10px;
+      background: var(--input-bg, #fff);
+      color: var(--text-primary, #0f172a);
+      font-size: 0.88rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
+    }
+    .admin-form-input:focus {
+      border-color: #3C91E6;
+      box-shadow: 0 0 0 3px rgba(60,145,230,0.15);
+    }
+
+    /* Status badges */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      border-radius: 9999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+    .status-badge.enabled  { background: var(--success-bg); border: 1px solid var(--success-border); color: var(--success-text); }
+    .status-badge.disabled { background: var(--error-bg);   border: 1px solid var(--error-border);   color: var(--error-text); }
+    .status-badge.cached   { background: var(--success-bg); border: 1px solid var(--success-border); color: var(--success-text); }
+    .status-badge.missing  { background: var(--warning-bg); border: 1px solid var(--warning-border); color: var(--warning-text); }
+
+    /* Action buttons */
+    .admin-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+      text-decoration: none;
+    }
+    .admin-btn:hover { opacity: 0.85; transform: translateY(-1px); }
+    .admin-btn.primary  { background: #3C91E6; color: #fff; }
+    .admin-btn.success  { background: #10b981; color: #fff; }
+    .admin-btn.danger   { background: #ef4444; color: #fff; }
+    .admin-btn.warning  { background: #f59e0b; color: #fff; }
+
+    /* ── Mobile admin ── */
+    @media (max-width: 767px) {
+      /* Navbar compact */
+      #content nav .nav-link { display: none; }
+      #content nav form { display: none !important; }
+      #content nav { padding: 0 10px; gap: 8px; }
+
+      /* Admin form stack */
+      .admin-form-input { width: 100%; max-width: 100%; }
+    }
+
+    /* Card head */
+    .admin-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 14px;
+      margin-bottom: 14px;
+      border-bottom: 1px solid var(--border-color, #e2e8f0);
+    }
+    .admin-card-head h3 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text-primary, #0f172a);
+      margin: 0;
+    }
+  </style>
 </head>
-<body>
+<body style="background: var(--bg-primary) !important; color: var(--text-primary); transition: background-color 0.3s ease, color 0.3s ease;" data-bs-theme="light">
+
   <section id="sidebar">
     <a href="#" class="brand">
-      <i class='bx bxs-smile bx-lg'></i>
-      <span class="text">AdminHub</span>
+      <i class='bx bxs-football bx-lg'></i>
+      <span class="text">IX-Admin</span>
     </a>
+    <button id="sidebar-toggle" title="Toggle sidebar" aria-label="Toggle sidebar">
+      <i class='bx bx-chevron-left' id="sidebar-toggle-icon"></i>
+    </button>
     <ul class="side-menu top">
       <li class="{% if request.path == '/admin-dashboard/' %}active{% endif %}">
         <a href="{% url 'admin-dashboard' %}">
@@ -24,34 +169,27 @@
       </li>
       <li class="{% if request.path == '/live_predictions/' %}active{% endif %}">
         <a href="{% url 'live_predictions' %}">
-          <i class='bx bxs-shopping-bag-alt bx-sm'></i>
+          <i class='bx bx-football bx-sm'></i>
           <span class="text">Predict</span>
         </a>
       </li>
-      
-			<li class="{% if request.path == '/actual_results/' %}active{% endif %}" >
-				<a href="{% url 'actual_results' %}">
-					<i class='bx bxs-message-dots bx-sm' ></i>
-					<span class="text">Results</span>
-				</a>
-			</li>
-			<li class="{% if request.path == '/team_logos/' %}active{% endif %}">
-				<a href="{% url 'team_logos' %}">
-					<i class='bx bxs-group bx-sm' ></i>
-					<span class="text">Logos</span>
-				</a>
-			</li>
+      <li class="{% if request.path == '/actual_results/' %}active{% endif %}">
+        <a href="{% url 'actual_results' %}">
+          <i class='bx bx-bar-chart-alt-2 bx-sm'></i>
+          <span class="text">Results</span>
+        </a>
+      </li>
+      <li class="{% if request.path == '/team_logos/' %}active{% endif %}">
+        <a href="{% url 'team_logos' %}">
+          <i class='bx bx-image bx-sm'></i>
+          <span class="text">Logos</span>
+        </a>
+      </li>
     </ul>
     <ul class="side-menu bottom">
       <li>
-        <a href="#">
-          <i class='bx bxs-cog bx-sm bx-spin-hover'></i>
-          <span class="text">Settings</span>
-        </a>
-      </li>
-      <li>
         <a href="{% url 'logout' %}" class="logout">
-          <i class='bx bx-power-off bx-sm bx-burst-hover'></i>
+          <i class='bx bx-power-off bx-sm'></i>
           <span class="text">Logout</span>
         </a>
       </li>
@@ -60,149 +198,94 @@
 
   <section id="content">
     <nav>
-      <i class='bx bx-menu bx-sm'></i>
-      <a href="#" class="nav-link">Categories</a>
+      <i class='bx bx-menu bx-sm' style="display:none;"></i>
+      <a href="#" class="nav-link">IX-Tips Admin</a>
       <form action="#" class="d-none d-md-inline">
         <div class="form-input">
           <input type="search" placeholder="Search...">
           <button type="submit" class="search-btn"><i class='bx bx-search'></i></button>
         </div>
       </form>
-      <input type="checkbox" class="checkbox" id="switch-mode" hidden />
-      <label class="swith-lm" for="switch-mode">
-        <i class="bx bxs-moon"></i>
-        <i class="bx bx-sun"></i>
-        <div class="ball"></div>
-      </label>
-      <a href="#" class="notification">
-        <i class='bx bxs-bell bx-tada-hover'></i>
-        <span class="num">3</span>
+      <button class="theme-toggle" id="theme-toggle" title="Toggle dark/light mode">
+        <i class='bx bxs-moon'></i>
+        <i class='bx bx-sun'></i>
+      </button>
+      <a href="{% url 'predictions_view' %}" class="nav-link" title="Go to public site" style="font-size:0.8rem; display:flex; align-items:center; gap:4px;">
+        <i class='bx bx-link-external'></i><span class="d-none d-md-inline">Public Site</span>
       </a>
-      <a href="#" class="profile">
-        <img src="https://placehold.co/600x400/png" alt="Profile">
+      <a href="{% url 'logout' %}" class="nav-link" title="Logout" style="color:#ef4444; display:flex; align-items:center; gap:4px;">
+        <i class='bx bx-power-off'></i><span class="d-none d-md-inline">Logout</span>
       </a>
     </nav>
 
     <main>
-      {% block content %}
-      <!-- Child templates will render content here -->
-      {% endblock %}
+      {% block content %}{% endblock %}
     </main>
   </section>
 
   <script>
-    const allSideMenu = document.querySelectorAll('#sidebar .side-menu.top li a');
-
-allSideMenu.forEach(item => {
-    const li = item.parentElement;
-
-    item.addEventListener('click', function () {
-        allSideMenu.forEach(i => {
-            i.parentElement.classList.remove('active');
-        })
-        li.classList.add('active');
-    })
-});
-
-// TOGGLE SIDEBAR
-const menuBar = document.querySelector('#content nav .bx.bx-menu');
-const sidebar = document.getElementById('sidebar');
-
-// Sidebar toggle işlemi
-menuBar.addEventListener('click', function () {
-    sidebar.classList.toggle('hide');
-});
-
-// Sayfa yüklendiğinde ve boyut değişimlerinde sidebar durumunu ayarlama
-function adjustSidebar() {
-    if (window.innerWidth <= 576) {
-        sidebar.classList.add('hide');  // 576px ve altı için sidebar gizli
-        sidebar.classList.remove('show');
-    } else {
-        sidebar.classList.remove('hide');  // 576px'den büyükse sidebar görünür
-        sidebar.classList.add('show');
+  (function() {
+    /* ── Theme ── */
+    function applyTheme(isDark) {
+      document.body.classList.toggle('dark', isDark);
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
     }
-}
+    applyTheme(localStorage.getItem('theme') === 'dark');
+    var themeToggle = document.getElementById('theme-toggle');
+    if (themeToggle) {
+      themeToggle.addEventListener('click', function() {
+        applyTheme(!document.body.classList.contains('dark'));
+      });
+    }
 
-// Sayfa yüklendiğinde ve pencere boyutu değiştiğinde sidebar durumunu ayarlama
-window.addEventListener('load', adjustSidebar);
-window.addEventListener('resize', adjustSidebar);
+    /* ── Sidebar toggle ── */
+    var sidebar = document.getElementById('sidebar');
+    var sidebarToggle = document.getElementById('sidebar-toggle');
+    var sidebarToggleIcon = document.getElementById('sidebar-toggle-icon');
 
-// Arama butonunu toggle etme
-const searchButton = document.querySelector('#content nav form .form-input button');
-const searchButtonIcon = document.querySelector('#content nav form .form-input button .bx');
-const searchForm = document.querySelector('#content nav form');
+    function updateToggleIcon() {
+      var isHidden = sidebar.classList.contains('hide');
+      if (sidebarToggleIcon) sidebarToggleIcon.className = isHidden ? 'bx bx-chevron-right' : 'bx bx-chevron-left';
+      if (sidebarToggle) sidebarToggle.classList.toggle('sidebar-hidden', isHidden);
+    }
 
-searchButton.addEventListener('click', function (e) {
-    if (window.innerWidth < 768) {
-        e.preventDefault();
-        searchForm.classList.toggle('show');
-        if (searchForm.classList.contains('show')) {
-            searchButtonIcon.classList.replace('bx-search', 'bx-x');
+    if (sidebarToggle) {
+      sidebarToggle.addEventListener('click', function() {
+        if (window.innerWidth <= 576) {
+          sidebar.classList.toggle('show');
         } else {
-            searchButtonIcon.classList.replace('bx-x', 'bx-search');
+          sidebar.classList.toggle('hide');
         }
-    }
-})
-
-// Dark Mode Switch
-const switchMode = document.getElementById('switch-mode');
-
-switchMode.addEventListener('change', function () {
-    if (this.checked) {
-        document.body.classList.add('dark');
-    } else {
-        document.body.classList.remove('dark');
-    }
-})
-
-// Notification Menu Toggle
-document.querySelector('.notification').addEventListener('click', function () {
-    document.querySelector('.notification-menu').classList.toggle('show');
-    document.querySelector('.profile-menu').classList.remove('show'); // Close profile menu if open
-});
-
-// Profile Menu Toggle
-document.querySelector('.profile').addEventListener('click', function () {
-    document.querySelector('.profile-menu').classList.toggle('show');
-    document.querySelector('.notification-menu').classList.remove('show'); // Close notification menu if open
-});
-
-// Close menus if clicked outside
-window.addEventListener('click', function (e) {
-    if (!e.target.closest('.notification') && !e.target.closest('.profile')) {
-        document.querySelector('.notification-menu').classList.remove('show');
-        document.querySelector('.profile-menu').classList.remove('show');
-    }
-});
-
-// Menülerin açılıp kapanması için fonksiyon
-    function toggleMenu(menuId) {
-      var menu = document.getElementById(menuId);
-      var allMenus = document.querySelectorAll('.menu');
-
-      // Diğer tüm menüleri kapat
-      allMenus.forEach(function(m) {
-        if (m !== menu) {
-          m.style.display = 'none';
-        }
+        updateToggleIcon();
       });
+    }
 
-      // Tıklanan menü varsa aç, yoksa kapat
-      if (menu.style.display === 'none' || menu.style.display === '') {
-        menu.style.display = 'block';
+    function adjustSidebar() {
+      if (window.innerWidth <= 768) {
+        sidebar.classList.add('hide');
       } else {
-        menu.style.display = 'none';
+        sidebar.classList.remove('hide');
       }
+      updateToggleIcon();
     }
+    window.addEventListener('load', adjustSidebar);
+    window.addEventListener('resize', adjustSidebar);
 
-    // Başlangıçta tüm menüleri kapalı tut
-    document.addEventListener("DOMContentLoaded", function() {
-      var allMenus = document.querySelectorAll('.menu');
-      allMenus.forEach(function(menu) {
-        menu.style.display = 'none';
+    /* ── Search toggle ── */
+    var searchBtn = document.querySelector('#content nav form .form-input button');
+    var searchForm = document.querySelector('#content nav form');
+    if (searchBtn && searchForm) {
+      searchBtn.addEventListener('click', function(e) {
+        if (window.innerWidth < 768) {
+          e.preventDefault();
+          searchForm.classList.toggle('show');
+          var icon = searchBtn.querySelector('.bx');
+          if (icon) icon.classList.toggle('bx-search');
+          if (icon) icon.classList.toggle('bx-x');
+        }
       });
-    });
+    }
+  })();
   </script>
 
   {% block scripts %}{% endblock %}

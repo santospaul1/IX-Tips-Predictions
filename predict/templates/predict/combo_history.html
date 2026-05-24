@@ -1,0 +1,260 @@
+{% extends "predict/base_prediction_dashboard.html" %}
+
+{% block page_title %}IX-Tips - Combo History{% endblock %}
+
+{% block page_styles %}
+{% include "predict/partials/prediction_shell_styles.html" %}
+{% include "predict/partials/prediction_component_styles.html" %}
+.summary-card, .saved-slip-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 22px;
+  box-shadow: 0 18px 40px var(--shadow);
+  backdrop-filter: blur(10px);
+  padding: 10px;
+}
+.action-row { gap: 8px; }
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.summary-metric {
+  background: var(--hover-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 14px;
+}
+.summary-value {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+.summary-note, .meta-line {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+.status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.status-pill, .action-pill { font-size: 0.82rem; font-weight: 700; padding: 8px 14px; }
+.saved-slips {
+  display: grid;
+  gap: 12px;
+}
+.saved-slip-card.active {
+  border-color: #93c5fd;
+  box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.35);
+}
+.saved-slip-card.won {
+  border-color: #86efac;
+  box-shadow: inset 0 0 0 1px rgba(134, 239, 172, 0.35);
+}
+.saved-slip-card.lost {
+  border-color: #fca5a5;
+  box-shadow: inset 0 0 0 1px rgba(252, 165, 165, 0.35);
+}
+.saved-slip-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+.saved-slip-status.active { background: var(--info-bg); color: var(--info-text); }
+.saved-slip-status.won { background: var(--success-bg); color: var(--success-text); }
+.saved-slip-status.lost { background: var(--error-bg); color: var(--error-text); }
+.saved-slip-status.pending,
+.saved-slip-status.push { background: var(--warning-bg); color: var(--warning-text); }
+.fixture-line {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.tip-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--light-blue);
+  border: 1px solid var(--blue);
+  color: var(--blue);
+  font-weight: 700;
+}
+.stat-row {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.saved-slip-toggle {
+  color: var(--blue);
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.saved-slip-legs {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+.saved-leg-row {
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.saved-leg-row.correct {
+  border-color: var(--success-border);
+  background: var(--success-bg);
+}
+.saved-leg-row.incorrect {
+  border-color: var(--error-border);
+  background: var(--error-bg);
+}
+.saved-leg-fixture {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.saved-leg-meta {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+.saved-leg-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--light-blue);
+  border: 1px solid var(--blue);
+  color: var(--blue);
+  font-weight: 700;
+}
+@media (max-width: 767px) {
+  .summary-card, .saved-slip-card { padding: 14px; border-radius: 18px; }
+}
+{% endblock %}
+
+{% block left_sidebar %}
+{% include "predict/partials/prediction_menu_block.html" with active_page="combo_history" %}
+{% endblock %}
+
+{% block right_sidebar %}{% include "predict/league_tables.html" %}{% endblock %}
+
+{% block page_header %}
+{% include "predict/partials/prediction_page_header.html" with header_title="Combo History" header_subtitle="Track won, active, and lost combos across saved and auto-tracked slips." header_actions_template="predict/partials/combo_history_header_actions.html" header_actions_class="action-row" %}
+{% endblock %}
+
+{% block page_content %}
+<div class="summary-grid">
+  <div class="summary-metric">
+    <div class="control-label">Total Tracked</div>
+    <div class="summary-value">{{ combo_tracking_summary.total }}</div>
+    <div class="summary-note">Saved and auto-tracked combos</div>
+  </div>
+  <div class="summary-metric">
+    <div class="control-label">Won</div>
+    <div class="summary-value">{{ combo_tracking_summary.won }}</div>
+    <div class="summary-note">Every leg settled and correct</div>
+  </div>
+  <div class="summary-metric">
+    <div class="control-label">Active</div>
+    <div class="summary-value">{{ combo_tracking_summary.active }}</div>
+    <div class="summary-note">Some matches pending, none wrong</div>
+  </div>
+  <div class="summary-metric">
+    <div class="control-label">Lost</div>
+    <div class="summary-value">{{ combo_tracking_summary.lost }}</div>
+    <div class="summary-note">At least one settled leg was wrong</div>
+  </div>
+</div>
+
+<div class="status-row">
+  {% for option in status_options %}
+  <a class="status-pill {% if option.key == status_filter %}active{% endif %}" href="?status={{ option.key }}">{{ option.label }}</a>
+  {% endfor %}
+</div>
+
+{% if saved_slips %}
+<div class="saved-slips">
+  {% for slip in saved_slips %}
+  <div class="saved-slip-card {{ slip.slip_status }}">
+    <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+      <div>
+        <div class="fixture-line">{{ slip.name }}</div>
+        <div class="meta-line">
+          {{ slip.style }} · {{ slip.size }} legs · {{ slip.market_filter }}
+          {% if slip.auto_generated %}· Auto tracked{% endif %}
+        </div>
+      </div>
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <span class="saved-slip-status {{ slip.slip_status }}">{{ slip.slip_status_label }}</span>
+        <div class="tip-pill">{% if slip.combined_odds %}{{ slip.combined_odds|floatformat:2 }}{% else %}-{% endif %}</div>
+      </div>
+    </div>
+    <div class="stat-row">
+      <span>Avg confidence {{ slip.average_confidence|floatformat:1 }}%</span>
+      <span>Priced legs {{ slip.priced_legs }}</span>
+      <span>Saved {{ slip.created_at|date:"Y-m-d H:i" }}</span>
+    </div>
+    {% if slip.legs %}
+    <details class="mt-3">
+      <summary class="saved-slip-toggle">View Slip</summary>
+      <div class="saved-slip-legs">
+        {% for leg in slip.legs %}
+        <div class="saved-leg-row{% if leg.is_correct is True %} correct{% elif leg.is_correct is False %} incorrect{% endif %}">
+          <div>
+            <div class="saved-leg-fixture">{{ leg.record.home_team }} vs {{ leg.record.away_team }}</div>
+            <div class="saved-leg-meta">
+              {{ leg.record.match_date }} · {{ leg.record.competition }}
+              {% if leg.actual_score %}· FT {{ leg.actual_score }}{% endif %}
+            </div>
+          </div>
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <span class="saved-leg-pill">{{ leg.record.tip }}</span>
+            <span class="saved-leg-meta">Conf {{ leg.record.confidence|floatformat:1 }}%</span>
+            <span class="saved-leg-meta">Odds {% if leg.record.odds %}{{ leg.record.odds|floatformat:2 }}{% else %}-{% endif %}</span>
+            {% if leg.is_correct is True %}
+            <span class="saved-leg-meta saved-leg-status">Correct</span>
+            {% elif leg.is_correct is False %}
+            <span class="saved-leg-meta saved-leg-status">Wrong</span>
+            {% elif leg.actual_tip == "Refund" %}
+            <span class="saved-leg-meta saved-leg-status">Refund</span>
+            {% else %}
+            <span class="saved-leg-meta">Pending</span>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </details>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="summary-card text-center text-muted">
+  No combos found for the selected status filter.
+</div>
+{% endif %}
+{% endblock %}

@@ -21,6 +21,10 @@ app.conf.beat_schedule = {
         'task': 'predict.tasks.refresh_daily_odds_cache',
         'schedule': crontab(hour=6, minute=20),
     },
+    'refresh-combo-slips-daily': {
+        'task': 'predict.tasks.refresh_combo_slips',
+        'schedule': crontab(hour=6, minute=30),
+    },
     'refresh-league-standings': {
         'task': 'predict.tasks.refresh_all_league_tables',
         'schedule': crontab(minute=1),

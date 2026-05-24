@@ -1,0 +1,277 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{% block page_title %}IX-Tips{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  {% block extra_head_links %}{% endblock %}
+  <style>
+    {% block page_styles %}{% endblock %}
+
+    /* ── 3-column layout — never wraps ── */
+    .dash-row {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px;
+    }
+    .dash-left {
+      flex: 0 0 160px;
+      width: 160px;
+      min-width: 0;
+      transition: flex 0.3s ease, width 0.3s ease, opacity 0.3s ease;
+      overflow: hidden;
+    }
+    .dash-center {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+    .dash-right {
+      flex: 0 0 195px;
+      width: 195px;
+      min-width: 0;
+      transition: flex 0.35s ease, width 0.35s ease;
+    }
+    /* League table expanded: right panel grows, center shrinks automatically */
+    .dash-row.league-expanded .dash-right {
+      flex: 0 0 370px;
+      width: 370px;
+    }
+
+    /* Collapsed: left sidebar shrinks to icon-only strip */
+    .dash-row.menu-collapsed .dash-left {
+      flex: 0 0 44px;
+      width: 44px;
+    }
+    .dash-row.menu-collapsed .menu-text { display: none; }
+    .dash-row.menu-collapsed .sidebar-title { display: none; }
+    .dash-row.menu-collapsed .sidebar-divider { display: none; }
+    .dash-row.menu-collapsed .bmc-expanded { display: none; }
+    .dash-row.menu-collapsed .bmc-collapsed { display: flex; justify-content: center; }
+    .dash-row.menu-collapsed .menu-link { justify-content: center; padding: 6px 4px; }
+    .dash-row.menu-collapsed .sidebar-panel { padding: 6px 4px; }
+
+    /* ── Top navbar ── */
+    .top-navbar {
+      height: 48px;
+      background: var(--card-bg, #fff);
+      border-bottom: 1px solid var(--border-color, #e2e8f0);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: background 0.3s ease;
+    }
+
+    /* ── Sidebar toggle tab — fixed at left sidebar's right edge ── */
+    #menu-toggle {
+      position: fixed;
+      top: 50vh;
+      left: 170px;   /* dash-left 160px + 10px padding */
+      transform: translateY(-50%);
+      z-index: 500;
+      width: 18px;
+      height: 44px;
+      background: var(--card-bg, #fff);
+      border: 1px solid var(--border-color, #e2e8f0);
+      border-left: none;
+      border-radius: 0 8px 8px 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--text-secondary, #64748b);
+      font-size: 13px;
+      padding: 0;
+      transition: left 0.3s ease, background 0.2s, color 0.2s;
+    }
+    #menu-toggle:hover { background: var(--hover-bg); color: var(--blue, #3C91E6); }
+    #menu-toggle.sidebar-collapsed { left: 54px; }
+
+    /* ── League table toggle tab — fixed at right panel's left edge ── */
+    #league-toggle {
+      position: fixed;
+      top: 50vh;
+      right: 205px;  /* dash-right 195px + 10px padding */
+      transform: translateY(-50%);
+      z-index: 500;
+      width: 18px;
+      height: 44px;
+      background: var(--card-bg, #fff);
+      border: 1px solid var(--border-color, #e2e8f0);
+      border-right: none;
+      border-radius: 8px 0 0 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--text-secondary, #64748b);
+      font-size: 13px;
+      padding: 0;
+      transition: right 0.35s ease, background 0.2s, color 0.2s;
+    }
+    #league-toggle:hover { background: var(--hover-bg); color: var(--blue, #3C91E6); }
+    #league-toggle.league-expanded { right: 380px; }  /* dash-right 370px + 10px */
+
+    .page-shell { margin-bottom: 0; }
+
+    /* Pages with no right sidebar */
+    body.no-right-sidebar .dash-right { display: none; }
+    body.no-right-sidebar #league-toggle { display: none; }
+
+    /* ── Mobile: hide sidebars, full-width center ── */
+    @media (max-width: 767px) {
+      .dash-left { flex: 0 0 0 !important; width: 0 !important; opacity: 0 !important; pointer-events: none !important; overflow: hidden !important; }
+      .dash-right { display: none !important; }
+      #menu-toggle { display: none !important; }
+      #league-toggle { display: none !important; }
+      .dash-row { padding: 6px; gap: 0; }
+      .top-navbar { padding: 0 10px; }
+      .page-shell { padding-bottom: 60px !important; }
+
+      /* Bottom nav for mobile navigation */
+      .mobile-bottom-nav {
+        display: flex !important;
+      }
+    }
+    @media (min-width: 768px) {
+      .mobile-bottom-nav { display: none !important; }
+    }
+
+    /* Bottom nav link style */
+    .bnav-link {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      color: var(--text-secondary, #64748b);
+      text-decoration: none;
+      font-size: 0.58rem;
+      font-weight: 600;
+      min-width: 44px;
+      padding: 2px 4px;
+      border-radius: 8px;
+      transition: color 0.15s;
+    }
+    .bnav-link i { font-size: 1.25rem; }
+    .bnav-link.active { color: var(--blue, #3C91E6); }
+    .bnav-link:hover { color: var(--text-primary, #0f172a); }
+  </style>
+</head>
+<body class="{% block body_class %}{% endblock %}" style="background: var(--bg-primary) !important; color: var(--text-primary); transition: background-color 0.3s ease, color 0.3s ease;" data-bs-theme="light">
+
+<div class="top-navbar">
+  <div class="d-flex align-items-center gap-2">
+    {% block navbar_left %}{% endblock %}
+  </div>
+  <div class="d-flex align-items-center gap-3">
+    <button class="theme-toggle" id="theme-toggle" title="Toggle dark/light mode">
+      <i class='bx bxs-moon'></i>
+      <i class='bx bx-sun'></i>
+    </button>
+    {% block navbar_right %}{% endblock %}
+  </div>
+</div>
+
+<!-- Left sidebar toggle -->
+<button id="menu-toggle" title="Toggle menu" aria-label="Toggle menu">
+  <i class='bx bx-chevron-left' id="menu-toggle-icon"></i>
+</button>
+
+<!-- League table toggle -->
+<button id="league-toggle" title="Expand league table" aria-label="Toggle league table">
+  <i class='bx bx-chevron-left' id="league-toggle-icon"></i>
+</button>
+
+<div class="dash-row" id="dash-row">
+
+  <div class="dash-left" id="dash-left">
+    {% block left_sidebar %}{% endblock %}
+  </div>
+
+  <div class="dash-center">
+    <div class="page-shell">
+      {% block page_header %}{% endblock %}
+      {% block page_content %}{% endblock %}
+    </div>
+  </div>
+
+  <div class="dash-right">
+    {% block right_sidebar %}{% endblock %}
+  </div>
+
+</div>
+
+<script>
+(function() {
+  /* Theme */
+  function applyTheme(isDark) {
+    document.body.classList.toggle('dark', isDark);
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  }
+  applyTheme(localStorage.getItem('theme') === 'dark');
+  var themeToggle = document.getElementById('theme-toggle');
+  if (themeToggle) {
+    themeToggle.addEventListener('click', function() {
+      applyTheme(!document.body.classList.contains('dark'));
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    var row     = document.getElementById('dash-row');
+    var leftBtn = document.getElementById('menu-toggle');
+    var leftIcon= document.getElementById('menu-toggle-icon');
+    if (!row || !leftBtn) return;
+
+    function setLeftState(collapsed) {
+      row.classList.toggle('menu-collapsed', collapsed);
+      leftBtn.classList.toggle('sidebar-collapsed', collapsed);
+      if (leftIcon) leftIcon.className = collapsed ? 'bx bx-chevron-right' : 'bx bx-chevron-left';
+      localStorage.setItem('dashMenuState', collapsed ? '1' : '0');
+    }
+    setLeftState(localStorage.getItem('dashMenuState') !== '0');
+    leftBtn.addEventListener('click', function() {
+      setLeftState(!row.classList.contains('menu-collapsed'));
+    });
+
+    /* ── League table toggle ── */
+    var leagueBtn  = document.getElementById('league-toggle');
+    var leagueIcon = document.getElementById('league-toggle-icon');
+    if (leagueBtn) {
+      function setLeagueState(expanded) {
+        row.classList.toggle('league-expanded', expanded);
+        leagueBtn.classList.toggle('league-expanded', expanded);
+        if (leagueIcon) leagueIcon.className = expanded ? 'bx bx-chevron-right' : 'bx bx-chevron-left';
+        localStorage.setItem('ltExpanded', expanded ? '1' : '0');
+      }
+      setLeagueState(localStorage.getItem('ltExpanded') === '1');
+      leagueBtn.addEventListener('click', function() {
+        setLeagueState(!row.classList.contains('league-expanded'));
+      });
+    }
+  });
+})();
+</script>
+
+{% block extra_scripts %}{% endblock %}
+
+<!-- Mobile bottom nav -->
+<nav class="mobile-bottom-nav" style="display:none; position:fixed; bottom:0; left:0; right:0; z-index:600; background:var(--card-bg,#fff); border-top:1px solid var(--border-color,#e2e8f0); padding:6px 0 env(safe-area-inset-bottom,6px); justify-content:space-around; align-items:center;">
+  <a href="{% url 'predictions_view' %}" class="bnav-link {% if request.resolver_match.url_name == 'predictions_view' %}active{% endif %}"><i class='bx bx-football'></i>Predictions</a>
+  <a href="{% url 'top_picks' %}" class="bnav-link {% if request.resolver_match.url_name == 'top_picks' %}active{% endif %}"><i class='bx bxs-star'></i>Top Picks</a>
+  <a href="{% url 'correct_score' %}" class="bnav-link {% if request.resolver_match.url_name == 'correct_score' %}active{% endif %}"><i class='bx bx-target-lock'></i>Score</a>
+  <a href="{% url 'anytime_scorer' %}" class="bnav-link {% if request.resolver_match.url_name == 'anytime_scorer' %}active{% endif %}"><i class='bx bx-run'></i>Scorer</a>
+  <a href="{% url 'market_picks' %}" class="bnav-link {% if request.resolver_match.url_name == 'market_picks' %}active{% endif %}"><i class='bx bx-trending-up'></i>Markets</a>
+  <a href="{% url 'combo_builder' %}" class="bnav-link {% if request.resolver_match.url_name == 'combo_builder' %}active{% endif %}"><i class='bx bx-layer'></i>Combo</a>
+  <a href="{% url 'won_slips' %}" class="bnav-link {% if request.resolver_match.url_name == 'won_slips' %}active{% endif %}"><i class='bx bx-trophy'></i>Won</a>
+</nav>
+</body>
+</html>

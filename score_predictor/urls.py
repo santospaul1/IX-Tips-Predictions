@@ -19,12 +19,13 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from predict.views import  predictions_view
+from predict.views import predictions_view
 from django.contrib.auth.views import LoginView, LogoutView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', include('predict.urls')),    
+    path('', include('predict.urls')),
+    path("api/v1/", include("predict.api_urls")),
     path("", predictions_view, name="predictions_view"),
     path("ceologin/", LoginView.as_view(template_name="predict/login.html"), name="ceologin"),
     

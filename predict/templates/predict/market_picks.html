@@ -1,0 +1,655 @@
+{% extends "predict/base_prediction_dashboard.html" %}
+
+{% block page_title %}IX-Tips - Market Picks{% endblock %}
+
+{% block page_styles %}
+{% include "predict/partials/prediction_shell_styles.html" %}
+{% include "predict/partials/prediction_component_styles.html" %}
+.fixture-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 22px;
+  box-shadow: 0 18px 40px var(--shadow);
+  backdrop-filter: blur(10px);
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+.fixture-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: linear-gradient(180deg, #2563eb 0%, #7c3aed 100%);
+}
+.control-select {
+  min-width: 220px;
+  padding: 0 12px;
+}
+.pill-link { padding: 7px 12px; }
+.group-row,
+.view-row,
+.toggle-row,
+.scope-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.active-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.active-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+.view-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.view-summary-card {
+  padding: 12px 14px;
+  background: var(--card-bg);
+  box-shadow: 0 10px 24px var(--shadow);
+  transition: background 0.3s ease;
+}
+.view-summary-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--text-secondary);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.view-summary-value {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+.category-card {
+  display: block;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  text-decoration: none;
+  color: inherit;
+  box-shadow: 0 10px 24px var(--shadow);
+  transition: background 0.3s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+.category-card:hover {
+  border-color: var(--blue, #93c5fd);
+  transform: translateY(-1px);
+}
+.category-card.active {
+  border-color: var(--blue, #93c5fd);
+  background: var(--light-blue);
+}
+.category-title {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+.category-description {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  margin-bottom: 10px;
+}
+.category-markets,
+.category-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.category-summary { gap: 8px; margin-bottom: 10px; }
+.category-summary-chip,
+.category-market-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  font-size: 0.68rem;
+}
+.category-summary-chip {
+  background: var(--card-bg);
+  color: var(--text-primary);
+  font-weight: 700;
+}
+.category-market-chip {
+  background: var(--hover-bg);
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.group-pill,
+.scope-pill,
+.view-pill,
+.toggle-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: 0.78rem;
+  font-weight: 600;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+.group-pill:hover,
+.scope-pill:hover,
+.view-pill:hover,
+.toggle-pill:hover {
+  background: var(--hover-bg);
+}
+.group-pill.active {
+  color: #1d4ed8;
+  border-color: #93c5fd;
+  background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
+}
+.scope-pill.active {
+  color: var(--text-primary);
+  border-color: var(--border-color);
+  background: var(--hover-bg);
+}
+.view-pill.active {
+  color: #7c3aed;
+  border-color: #c4b5fd;
+  background: linear-gradient(135deg, #ede9fe 0%, #f5f3ff 100%);
+}
+.toggle-pill.active {
+  color: #047857;
+  border-color: #86efac;
+  background: linear-gradient(135deg, #dcfce7 0%, #effcf5 100%);
+}
+/* Dark mode overrides for colored active pills */
+body.dark .group-pill.active {
+  background: var(--light-blue);
+  color: var(--blue, #3C91E6);
+  border-color: var(--blue, #3C91E6);
+}
+body.dark .scope-pill.active {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+body.dark .view-pill.active {
+  background: rgba(124, 58, 237, 0.15);
+  border-color: rgba(124, 58, 237, 0.4);
+  color: #a78bfa;
+}
+body.dark .toggle-pill.active {
+  background: rgba(4, 120, 87, 0.15);
+  border-color: rgba(134, 239, 172, 0.4);
+  color: #86efac;
+}
+.fixture-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.meta-line {
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+}
+.competition-line {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.competition-logo {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  flex: 0 0 16px;
+}
+.market-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
+  border: 1px solid #93c5fd;
+  color: #1d4ed8;
+  font-weight: 800;
+  font-size: 0.94rem;
+}
+body.dark .market-pill {
+  background: var(--light-blue);
+  border-color: var(--blue, #3C91E6);
+  color: var(--blue, #3C91E6);
+}
+.market-pill.won {
+  background: linear-gradient(135deg, #dcfce7 0%, #effcf5 100%);
+  border-color: #86efac;
+  color: #047857;
+}
+body.dark .market-pill.won {
+  background: rgba(4, 120, 87, 0.15);
+  border-color: rgba(134, 239, 172, 0.4);
+  color: #86efac;
+}
+.market-pill.lost {
+  background: linear-gradient(135deg, #fee2e2 0%, #fff1f2 100%);
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+body.dark .market-pill.lost {
+  background: rgba(185, 28, 28, 0.15);
+  border-color: rgba(252, 165, 165, 0.4);
+  color: #fca5a5;
+}
+.market-pill.push {
+  background: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%);
+  border-color: #fcd34d;
+  color: #b45309;
+}
+body.dark .market-pill.push {
+  background: rgba(180, 83, 9, 0.15);
+  border-color: rgba(252, 211, 77, 0.4);
+  color: #fcd34d;
+}
+.match-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+.team-block {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.team-logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+.team-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.vs-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--hover-bg);
+  color: var(--text-secondary);
+  font-weight: 800;
+  text-transform: uppercase;
+  flex: 0 0 auto;
+}
+.meta-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--hover-bg);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.reason-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.reason-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--hover-bg);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  line-height: 1.2;
+}
+.status-line {
+  margin-top: 10px;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+.market-table-wrap {
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  box-shadow: 0 14px 28px var(--shadow);
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+.market-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+}
+.market-table thead th {
+  background: var(--table-header-bg, #f8fbff);
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+.market-table tbody td {
+  padding: 11px 12px;
+  border-top: 1px solid var(--border-color);
+  vertical-align: top;
+  color: var(--text-primary);
+}
+.market-table tbody tr:nth-child(even) {
+  background: var(--hover-bg);
+}
+.table-fixture { min-width: 240px; }
+.table-team-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.table-team-line + .table-team-line {
+  margin-top: 6px;
+}
+.table-vs {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--light-blue);
+  color: var(--blue, #2563eb);
+  font-size: 0.68rem;
+  font-weight: 700;
+  margin: 0 0 0 36px;
+}
+.settled-text {
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+.settled-text.won { color: #047857; }
+.settled-text.lost { color: #b91c1c; }
+.settled-text.push { color: #b45309; }
+body.dark .settled-text.won { color: #86efac; }
+body.dark .settled-text.lost { color: #fca5a5; }
+body.dark .settled-text.push { color: #fcd34d; }
+
+/* ── Mobile ── */
+@media (max-width: 767px) {
+  .fixture-card { border-radius: 18px; padding: 14px; }
+  .control-select { width: 100%; min-width: 0; }
+  .team-name { font-size: 0.96rem; }
+  .market-pill { width: 100%; justify-content: center; }
+  .category-grid { grid-template-columns: 1fr; }
+  .view-summary-grid { grid-template-columns: repeat(2, 1fr); }
+  .match-row { gap: 10px; }
+  .fixture-top { flex-direction: column; }
+  .table-fixture { min-width: 180px; }
+  .market-table { font-size: 0.76rem; }
+  .market-table thead th { padding: 8px 8px; }
+  .market-table tbody td { padding: 9px 8px; }
+}
+{% endblock %}
+
+{% block left_sidebar %}
+{% include "predict/partials/prediction_menu_block.html" with active_page="market_picks" %}
+{% endblock %}
+
+{% block right_sidebar %}{% include "predict/league_tables.html" %}{% endblock %}
+
+{% block page_header %}
+{% include "predict/partials/prediction_page_header.html" with header_class="mb-4" header_title="Market Picks" header_subtitle="Start with a market category, then drill into the exact pick type you want." header_actions_template="predict/partials/market_picks_header_actions.html" header_actions_class="action-row" %}
+{% endblock %}
+
+{% block page_content %}
+<div class="category-grid">
+  {% for category in market_category_cards %}
+  <a class="category-card {% if category.key == selected_group %}active{% endif %}" href="?group={{ category.key }}&scope={{ selected_scope }}&sort={{ selected_sort }}&limit={{ selected_limit }}&view={{ selected_view }}&{% if priced_only %}priced=1&{% endif %}market={{ category.default_market|urlencode }}">
+    <div class="category-title">{{ category.label }}</div>
+    <div class="category-description">{{ category.description }}</div>
+    <div class="category-summary">
+      <span class="category-summary-chip">{{ category.pick_count }} upcoming picks</span>
+      {% if category.avg_confidence %}
+      <span class="category-summary-chip">Avg {{ category.avg_confidence|floatformat:1 }}%</span>
+      {% endif %}
+    </div>
+    <div class="category-markets">
+      {% for market in category.markets %}
+      <span class="category-market-chip">{{ market }}</span>
+      {% endfor %}
+    </div>
+  </a>
+  {% endfor %}
+</div>
+
+<div class="scope-row">
+  {% for scope in market_scopes %}
+  <a class="scope-pill {% if scope.key == selected_scope %}active{% endif %}" href="?group={{ selected_group }}&scope={{ scope.key }}&sort={{ selected_sort }}&limit={{ selected_limit }}&view={{ selected_view }}&{% if priced_only %}priced=1&{% endif %}market={{ selected_market|urlencode }}">{{ scope.label }}</a>
+  {% endfor %}
+</div>
+
+<div class="active-chip-row">
+  {% for chip in active_filter_chips %}
+  <span class="active-chip">{{ chip }}</span>
+  {% endfor %}
+</div>
+
+<div class="view-row">
+  <a class="view-pill {% if selected_view == 'card' %}active{% endif %}" href="?group={{ selected_group }}&scope={{ selected_scope }}&sort={{ selected_sort }}&limit={{ selected_limit }}&view=card&{% if priced_only %}priced=1&{% endif %}market={{ selected_market|urlencode }}">Card View</a>
+  <a class="view-pill {% if selected_view == 'table' %}active{% endif %}" href="?group={{ selected_group }}&scope={{ selected_scope }}&sort={{ selected_sort }}&limit={{ selected_limit }}&view=table&{% if priced_only %}priced=1&{% endif %}market={{ selected_market|urlencode }}">Table View</a>
+</div>
+
+<div class="toggle-row">
+  <a class="toggle-pill {% if priced_only %}active{% endif %}" href="?group={{ selected_group }}&scope={{ selected_scope }}&sort={{ selected_sort }}&limit={{ selected_limit }}&view={{ selected_view }}&{% if not priced_only %}priced=1&{% endif %}market={{ selected_market|urlencode }}">
+    {% if priced_only %}Priced Only On{% else %}Priced Only Off{% endif %} ({{ priced_only_count }})
+  </a>
+</div>
+
+<div class="view-summary-grid">
+  <div class="view-summary-card">
+    <div class="view-summary-label">Visible Picks</div>
+    <div class="view-summary-value">
+      {{ view_summary.count }}
+      {% if selected_limit != "all" and view_summary.total_count %}
+      <span class="text-muted" style="font-size:0.72em;font-weight:700;">of {{ view_summary.total_count }}</span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="view-summary-card">
+    <div class="view-summary-label">Priced Picks</div>
+    <div class="view-summary-value">{{ view_summary.priced }}</div>
+  </div>
+  <div class="view-summary-card">
+    <div class="view-summary-label">Avg Confidence</div>
+    <div class="view-summary-value">{% if view_summary.avg_confidence is not None %}{{ view_summary.avg_confidence|floatformat:1 }}%{% else %}-{% endif %}</div>
+  </div>
+  <div class="view-summary-card">
+    <div class="view-summary-label">Avg Edge</div>
+    <div class="view-summary-value">{% if view_summary.avg_edge is not None %}{{ view_summary.avg_edge|floatformat:1 }}%{% else %}-{% endif %}</div>
+  </div>
+</div>
+
+<div class="group-row">
+  {% for group in market_groups %}
+  <a class="group-pill {% if group.key == selected_group %}active{% endif %}" href="?group={{ group.key }}&scope={{ selected_scope }}&sort={{ selected_sort }}&limit={{ selected_limit }}&view={{ selected_view }}&{% if priced_only %}priced=1{% endif %}">{{ group.label }}</a>
+  {% endfor %}
+</div>
+
+{% if predictions and selected_view == "card" %}
+  <div class="d-grid gap-3">
+    {% for match in predictions %}
+    <div class="fixture-card">
+      <div class="fixture-top">
+        <div>
+          <div class="meta-line">{{ match.match_date }} {% if match.match_time %}{{ match.match_time }}{% endif %}</div>
+          <div class="competition-line">
+            {% if match.competition_logo %}<img src="{{ match.competition_logo }}" class="competition-logo" alt="{{ match.competition }}">{% endif %}
+            {{ match.competition }}
+          </div>
+        </div>
+        <div class="market-pill{% if match.actual_tip == 'Refund' %} push{% elif match.is_correct is True %} won{% elif match.is_correct is False %} lost{% endif %}">
+          {{ match.tip }}
+        </div>
+      </div>
+
+      <div class="match-row">
+        <div class="team-block">
+          {% if match.home_logo %}<img src="{{ match.home_logo }}" class="team-logo" alt="{{ match.home_team }}">{% endif %}
+          <span class="team-name">{{ match.home_team }}</span>
+        </div>
+        <span class="vs-chip">vs</span>
+        <div class="team-block">
+          {% if match.away_logo %}<img src="{{ match.away_logo }}" class="team-logo" alt="{{ match.away_team }}">{% endif %}
+          <span class="team-name">{{ match.away_team }}</span>
+        </div>
+      </div>
+
+      <div class="meta-grid">
+        <span class="meta-chip">Conf {{ match.confidence|floatformat:1 }}%</span>
+        <span class="meta-chip">Odds {% if match.odds %}{{ match.odds|floatformat:2 }}{% else %}-{% endif %}</span>
+        {% if match.edge is not None %}
+        <span class="meta-chip">Edge {{ match.edge|floatformat:1 }}%</span>
+        {% endif %}
+        {% if match.actual_score %}
+        <span class="meta-chip">FT {{ match.actual_score }}</span>
+        {% endif %}
+      </div>
+
+      {% if match.reasons %}
+      <div class="reason-list">
+        {% for reason in match.reasons %}
+        <span class="reason-chip">{{ reason }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if match.actual_score %}
+      <div class="status-line">
+        {% if match.actual_tip == 'Refund' %}
+        Refund
+        {% elif match.is_correct is True %}
+        Won
+        {% elif match.is_correct is False %}
+        Lost
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <div class="mt-3">
+        <a href="{{ match.detail_url }}" class="pill-link">View Match</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+{% elif predictions %}
+  <div class="market-table-wrap">
+    <table class="market-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Comp</th>
+          <th class="table-fixture">Fixture</th>
+          <th>Market</th>
+          <th>Conf</th>
+          <th>Odds</th>
+          <th>FT</th>
+          <th>Result</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for match in predictions %}
+        <tr>
+          <td>
+            {{ match.match_date }}<br>
+            <span class="text-muted small">{{ match.match_time|default:"-" }}</span>
+          </td>
+          <td>{{ match.competition }}</td>
+          <td class="table-fixture">
+            <div class="table-team-line">
+              {% if match.home_logo %}<img src="{{ match.home_logo }}" class="team-logo" alt="{{ match.home_team }}">{% endif %}
+              <span>{{ match.home_team }}</span>
+            </div>
+            <span class="table-vs">vs</span>
+            <div class="table-team-line">
+              {% if match.away_logo %}<img src="{{ match.away_logo }}" class="team-logo" alt="{{ match.away_team }}">{% endif %}
+              <span>{{ match.away_team }}</span>
+            </div>
+          </td>
+          <td>{{ match.tip }}</td>
+          <td>{{ match.confidence|floatformat:1 }}%</td>
+          <td>{% if match.odds is not None %}{{ match.odds|floatformat:2 }}{% else %}-{% endif %}</td>
+          <td>{{ match.actual_score|default:"-" }}</td>
+          <td>
+            {% if match.actual_tip == "Refund" %}
+            <span class="settled-text push">Refund</span>
+            {% elif match.is_correct is True %}
+            <span class="settled-text won">Won</span>
+            {% elif match.is_correct is False %}
+            <span class="settled-text lost">Lost</span>
+            {% else %}
+            <span class="text-muted small">Pending</span>
+            {% endif %}
+          </td>
+          <td><a href="{{ match.detail_url }}" class="pill-link">View</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="fixture-card text-center text-muted">
+    No upcoming picks available for {{ selected_market }} in this group yet.
+  </div>
+{% endif %}
+{% endblock %}

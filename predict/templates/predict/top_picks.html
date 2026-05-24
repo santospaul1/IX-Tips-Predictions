@@ -1,329 +1,591 @@
-{% load static %}
+{% extends "predict/base_prediction_dashboard.html" %}
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Top Picks - IX-Tips</title>
-    
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Flatpickr CSS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+{% block page_title %}Top Picks - IX-Tips{% endblock %}
 
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f8f9fa;
-        }
-        .badge-info-custom {
-            background-color: #d1ecf1;
-            color: #0c5460;
-        }
-        .top-picks-table {
-            border-collapse: separate;
-            border-spacing: 0;
-            font-size: 0.82rem;
-        }
-        .team-cell {
-            min-width: 230px;
-        }
-        .team-logo {
-            width: 20px;
-            height: 20px;
-            object-fit: contain;
-            flex: 0 0 20px;
-        }
-        .team-badge {
-            width: 20px;
-            height: 20px;
-            border-radius: 9999px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            flex: 0 0 20px;
-            font-size: 0.55rem;
-            font-weight: 700;
-            color: #1e3a8a;
-            background: linear-gradient(135deg, #dbeafe, #bfdbfe);
-            border: 1px solid #93c5fd;
-            text-transform: uppercase;
-        }
-        .team-line {
-            display: flex;
-            align-items: center;
-            gap: 0.45rem;
-            min-width: 0;
-        }
-        .team-name {
-            font-weight: 600;
-            color: #111827;
-            white-space: nowrap;
-            font-size: 0.82rem;
-        }
-        .fixture-divider {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 1.55rem;
-            height: 1.55rem;
-            border-radius: 9999px;
-            background: #eff6ff;
-            color: #2563eb;
-            font-weight: 700;
-            font-size: 0.65rem;
-            flex: 0 0 1.55rem;
-        }
-        .result-chip {
-            min-width: 2rem;
-        }
-        .competition-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.35rem;
-            padding: 0.25rem 0.5rem;
-            border-radius: 9999px;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            white-space: nowrap;
-            font-weight: 600;
-            color: #334155;
-            font-size: 0.72rem;
-        }
-        .competition-logo {
-            width: 14px;
-            height: 14px;
-            object-fit: contain;
-            flex: 0 0 14px;
-        }
-        .top-picks-table th {
-            font-size: 0.68rem;
-            padding: 0.7rem 0.7rem;
-        }
-        .top-picks-table td {
-            padding: 0.75rem 0.7rem;
-        }
-        @media (max-width: 768px) {
-            .team-cell {
-                min-width: 190px;
-            }
-            .team-logo {
-                width: 18px;
-                height: 18px;
-                flex-basis: 18px;
-            }
-            .team-badge {
-                width: 18px;
-                height: 18px;
-                flex-basis: 18px;
-                font-size: 0.5rem;
-            }
-            .team-name {
-                white-space: normal;
-                font-size: 0.76rem;
-            }
-            .fixture-divider {
-                width: 1.35rem;
-                height: 1.35rem;
-                flex-basis: 1.35rem;
-                font-size: 0.58rem;
-            }
-            .competition-pill {
-                padding: 0.2rem 0.4rem;
-                font-size: 0.66rem;
-            }
-            .top-picks-table {
-                font-size: 0.76rem;
-            }
-            .top-picks-table th {
-                font-size: 0.62rem;
-                padding: 0.55rem 0.45rem;
-            }
-            .top-picks-table td {
-                padding: 0.6rem 0.45rem;
-            }
-        }
-    </style>
-</head>
+{% block extra_head_links %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+{% endblock %}
 
-<body class="p-4 bg-gray-100 min-h-screen flex flex-col items-center">
+{% block body_class %}no-right-sidebar{% endblock %}
 
-<div class="container mx-auto py-4 px-4 sm:px-6 lg:px-8 max-w-7xl w-full text-center">
-  
-  <!-- Header Section -->
-  <div class="flex flex-col sm:flex-row justify-between items-center mb-6">
-    <a href="{% url 'predictions_view' %}" class="px-5 py-2 text-sm font-medium rounded-full transition-all duration-200 ease-in-out transform hover:scale-105 bg-blue-600 text-white shadow-md hover:bg-blue-700">
-      View All Predictions
-    </a>
+{% block page_styles %}
+{% include "predict/partials/prediction_shell_styles.html" %}
+{% include "predict/partials/prediction_component_styles.html" %}
+.menu-list { margin-top: 8px; }
+.menu-link { line-height: 1.25; }
+.support-card { padding-bottom: 12px; }
+.page-shell { padding: 14px; }
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+.page-title {
+  font-size: clamp(1.35rem, 2.2vw, 1.7rem);
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.15;
+}
+.page-subtitle {
+  color: var(--text-secondary);
+  margin-top: 4px;
+  font-size: 0.8rem;
+}
+.header-actions { gap: 6px; }
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.toolbar-sep {
+  width: 1px;
+  height: 22px;
+  background: var(--border-color);
+  margin: 0 2px;
+}
+.date-input {
+  height: 34px;
+  max-width: 150px;
+  color: var(--text-primary);
+  background: var(--input-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0 10px;
+  font-size: 0.78rem;
+}
+.select-input {
+  height: 34px;
+  max-width: 180px;
+  color: var(--text-primary);
+  background: var(--input-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0 8px;
+  font-size: 0.78rem;
+}
+.variant-row { display: flex; flex-wrap: wrap; gap: 6px; }
 
-    <h4 class="text-3xl font-extrabold text-gray-800 mb-4 sm:mb-0 text-center">
-      <span class="text-red-500">🔥</span> Top Picks for {{ selected_date|date:"F j, Y" }}
-    </h4>
+/* Compact stats strip */
+.stats-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.stat-chip strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+.stat-chip a {
+  color: var(--blue);
+  text-decoration: none;
+  font-weight: 600;
+}
+.acc-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--hover-bg);
+  border: 1px solid var(--border-color);
+  margin-bottom: 10px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+.acc-strip strong { color: var(--text-primary); font-weight: 700; }
+.acc-strip .acc-badge {
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
 
-    <div class="text-sm text-gray-600 px-3 py-1 bg-white rounded-full shadow-sm border border-gray-200">
-        Source: <span class="font-semibold">{{ source|title }}</span>
+/* Table overrides for dark mode */
+.top-picks-table-container {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 22px;
+  overflow: hidden;
+}
+.top-picks-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+}
+.team-cell {
+  min-width: 230px;
+}
+.team-logo {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  flex: 0 0 20px;
+}
+.team-badge {
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 20px;
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: var(--blue);
+  background: var(--light-blue);
+  border: 1px solid var(--blue);
+  text-transform: uppercase;
+}
+.team-line {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+.team-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  font-size: 0.82rem;
+}
+.fixture-divider {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 9999px;
+  background: var(--light-blue);
+  color: var(--blue);
+  font-weight: 700;
+  font-size: 0.65rem;
+  flex: 0 0 1.55rem;
+}
+.result-chip {
+  min-width: 2rem;
+}
+.competition-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  background: var(--hover-bg);
+  border: 1px solid var(--border-color);
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.72rem;
+}
+.competition-logo {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+  flex: 0 0 14px;
+}
+.top-picks-table th {
+  font-size: 0.68rem;
+  padding: 0.58rem 0.62rem;
+  background: var(--table-header-bg);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+}
+.top-picks-table td {
+  padding: 0.62rem 0.62rem;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+}
+.top-picks-table tbody tr {
+  background: var(--card-bg);
+}
+.top-picks-table tbody tr:nth-child(odd) {
+  background: var(--hover-bg);
+}
+.top-picks-table tbody tr:hover {
+  background: var(--hover-bg);
+}
+.reason-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.32rem;
+}
+.reason-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.45rem;
+  border-radius: 9999px;
+  background: var(--hover-bg);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.63rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.metric-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+}
+.metric-subtle {
+  font-size: 0.66rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.actual-score {
+  margin-top: 0.24rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+  .sidebar-left, .support-card, .page-shell {
+    padding: 16px;
+    border-radius: 18px;
+  }
+  .menu-link {
+    font-size: 0.78rem;
+    padding: 7px 9px;
+  }
+  .page-shell {
+    padding: 16px;
+  }
+  .page-header {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+  }
+  .header-actions {
+    justify-content: flex-start;
+  }
+  .variant-row,
+  .export-row {
+    width: 100%;
+  }
+  .variant-pill,
+  .action-pill {
+    flex: 1 1 auto;
+  }
+  .team-cell {
+    min-width: 190px;
+  }
+  .team-logo {
+    width: 18px;
+    height: 18px;
+    flex-basis: 18px;
+  }
+  .team-badge {
+    width: 18px;
+    height: 18px;
+    flex-basis: 18px;
+    font-size: 0.5rem;
+  }
+  .team-name {
+    white-space: normal;
+    font-size: 0.76rem;
+  }
+  .fixture-divider {
+    width: 1.35rem;
+    height: 1.35rem;
+    flex-basis: 1.35rem;
+    font-size: 0.58rem;
+  }
+  .competition-pill {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.66rem;
+  }
+  .top-picks-table {
+    font-size: 0.76rem;
+  }
+  .top-picks-table th {
+    font-size: 0.62rem;
+    padding: 0.55rem 0.45rem;
+  }
+  .top-picks-table td {
+    padding: 0.6rem 0.45rem;
+  }
+  .reason-chip {
+    white-space: normal;
+  }
+  .date-input, .select-input { max-width: 100%; width: calc(50% - 3px); }
+  .toolbar { gap: 4px; }
+}
+{% endblock %}
+
+{% block left_sidebar %}
+{% include "predict/partials/prediction_menu_block.html" with active_page="top_picks" %}
+{% endblock %}
+
+{% block right_sidebar %}{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Top Picks</h1>
+    <div class="page-subtitle">{{ header_label }} · <span style="color:var(--text-secondary);">{{ source|title }}</span></div>
+  </div>
+  <div class="header-actions" style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+    <div class="variant-row">
+      <a href="?match_date={{ selected_date|date:'Y-m-d' }}&variant=1{% if filter_label %}&filter={{ filter_label|urlencode }}{% endif %}{% if show_past %}&past=1{% endif %}" class="variant-pill {% if variant == '1' %}active{% endif %}">Sure 1</a>
+      <a href="?match_date={{ selected_date|date:'Y-m-d' }}&variant=2{% if filter_label %}&filter={{ filter_label|urlencode }}{% endif %}" class="variant-pill {% if variant == '2' %}active variant-2{% endif %}">Sure 2</a>
+      <a href="?variant=3{% if filter_label %}&filter={{ filter_label|urlencode }}{% endif %}" class="variant-pill {% if variant == '3' %}active variant-3{% endif %}">Running Bet</a>
+      <a href="?variant=4{% if filter_label %}&filter={{ filter_label|urlencode }}{% endif %}" class="variant-pill {% if variant == '4' %}active variant-4{% endif %}">Mshipi</a>
     </div>
   </div>
+</div>
+{% endblock %}
 
-  <!-- Filter Controls -->
-  <div class="flex flex-col sm:flex-row justify-center items-center gap-4 mb-8">
-    <form id="filter-form" method="get" class="flex flex-wrap items-center justify-center gap-2 w-full sm:w-auto">
-      <input type="text" id="date-picker" name="match_date" placeholder="Select Date"
-             class="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
-             value="{{ selected_date|date:'Y-m-d' }}" readonly>
-      
-      <select name="filter" 
-              class="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm bg-white"
-              onchange="document.getElementById('filter-form').submit()">
-        <option value="">All Predictions</option>
-        <option value="1" {% if filter_label == "1" %}selected{% endif %}>Home Win (1)</option>
-        <option value="2" {% if filter_label == "2" %}selected{% endif %}>Away Win (2)</option>
-        <option value="X" {% if filter_label == "X" %}selected{% endif %}>Draw (X)</option>
-        <option value="GG" {% if filter_label == "GG" %}selected{% endif %}>Both Teams to Score (GG)</option>
-        <option value="Over 2.5" {% if filter_label == "Over 2.5" %}selected{% endif %}>Over 2.5 Goals</option>
-      </select>
-    </form>
-
-    <a href="?past=1" class="px-5 py-2 text-sm font-medium rounded-full transition-all duration-200 ease-in-out transform hover:scale-105 bg-white border border-gray-400 text-gray-700 hover:bg-gray-50 shadow-sm">
-      View Past Tips
-    </a>
-    
-
-    <a href="{% url 'top_picks' %}" class="px-5 py-2 text-sm font-medium rounded-full transition-all duration-200 ease-in-out transform hover:scale-105 bg-white border border-red-400 text-red-600 hover:bg-red-50 shadow-sm">
-      Clear All Filters
-    </a>
+{% block page_content %}
+<!-- Compact toolbar: date + filter + actions all in one line -->
+<form id="filter-form" method="get">
+  <input type="hidden" name="variant" value="{{ variant }}">
+  <div class="toolbar">
+    <input type="text" id="date-picker" name="match_date" placeholder="Date"
+           class="date-input" value="{{ selected_date|date:'Y-m-d' }}" readonly
+           {% if variant == '3' or variant == '4' %}disabled{% endif %}>
+    <select name="filter" class="select-input" onchange="document.getElementById('filter-form').submit()">
+      <option value="">All Tips</option>
+      <option value="1" {% if filter_label == "1" %}selected{% endif %}>Home Win (1)</option>
+      <option value="2" {% if filter_label == "2" %}selected{% endif %}>Away Win (2)</option>
+      <option value="X" {% if filter_label == "X" %}selected{% endif %}>Draw (X)</option>
+      <option value="GG" {% if filter_label == "GG" %}selected{% endif %}>GG</option>
+      <option value="NG" {% if filter_label == "NG" %}selected{% endif %}>NG</option>
+      <option value="Over 2.5" {% if filter_label == "Over 2.5" %}selected{% endif %}>Over 2.5</option>
+      <option value="Under 2.5" {% if filter_label == "Under 2.5" %}selected{% endif %}>Under 2.5</option>
+      <option value="Any Team Over 1.5" {% if filter_label == "Any Team Over 1.5" %}selected{% endif %}>Any &gt;1.5</option>
+      <option value="Home Win Either Half" {% if filter_label == "Home Win Either Half" %}selected{% endif %}>Home EH</option>
+      <option value="Away Win Either Half" {% if filter_label == "Away Win Either Half" %}selected{% endif %}>Away EH</option>
+      <option value="Home Team Over 1.0" {% if filter_label == "Home Team Over 1.0" %}selected{% endif %}>Home &gt;1.0</option>
+      <option value="Away Team Over 1.0" {% if filter_label == "Away Team Over 1.0" %}selected{% endif %}>Away &gt;1.0</option>
+    </select>
+    <div class="toolbar-sep"></div>
+    <a href="?past=1{% if variant %}&variant={{ variant }}{% endif %}" class="action-pill">Past Tips</a>
+    <a href="{% url 'top_picks' %}" class="action-pill" style="color:var(--error-text); border-color:var(--error-border);">Clear</a>
+    <div class="toolbar-sep"></div>
+    <a href="{% url 'export_top_picks' format='csv' %}?match_date={{ selected_date }}&variant={{ variant }}" class="action-pill">CSV</a>
+    <a href="{% url 'export_top_picks' format='pdf' %}?match_date={{ selected_date }}&variant={{ variant }}" class="action-pill">PDF</a>
   </div>
-  <div class="flex justify-center gap-3 mb-6">
-    <a href="{% url 'export_top_picks' format='csv' %}?match_date={{ selected_date }}" class="px-4 py-2 text-sm font-medium rounded-full bg-white border border-gray-300 text-gray-700 shadow-sm hover:bg-gray-50">
-      Export CSV
-    </a>
-    <a href="{% url 'export_top_picks' format='pdf' %}?match_date={{ selected_date }}" class="px-4 py-2 text-sm font-medium rounded-full bg-white border border-gray-300 text-gray-700 shadow-sm hover:bg-gray-50">
-      Export PDF
-    </a>
-  </div>
+</form>
 
-  <!-- Top Picks Display -->
-  <div class="bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden">
-    {% if prediction %}
-      <div class="overflow-x-auto">
-        <table class="top-picks-table min-w-full text-sm text-left text-gray-700">
-          <thead class="bg-slate-100 text-slate-800 uppercase tracking-wide">
-            <tr>
-              <th>Date</th>
-              <th>Comp</th>
-              <th>Fixture</th>
-              <th class="text-center">Tip</th>
-              <th class="text-center">Conf</th>
-              <th class="text-center">Odds</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200">
-            {% for p in prediction %}
-            <tr class="hover:bg-slate-50">
-              <td class="font-semibold whitespace-nowrap">
-                <div>{{ p.match_date|date:"Y-m-d" }}</div>
-                {% if p.match_time %}
-                <div class="text-[0.68rem] font-normal text-gray-500">{{ p.match_time }}</div>
+<!-- Slip wins: compact chips -->
+{% if slip_summary %}
+<div class="stats-strip">
+  <span style="font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-secondary);">Slip Wins</span>
+  {% for item in slip_summary %}
+  <span class="stat-chip">
+    {{ item.label }}: <strong>{{ item.won }}/{{ item.settled }}</strong>
+    &nbsp;<a href="{% url 'won_slips' %}?variant={{ item.variant|default:forloop.counter }}">↗</a>
+  </span>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Accumulator summary: compact strip -->
+{% if accumulator_summary %}
+<div class="acc-strip">
+  <span>Accu:</span>
+  <strong>{{ accumulator_summary.legs }} legs</strong>
+  <span>·</span>
+  <strong>{{ accumulator_summary.priced_legs }} priced</strong>
+  <span>·</span>
+  <span>Odds <strong>{% if accumulator_summary.combined_odds %}{{ accumulator_summary.combined_odds|floatformat:2 }}{% else %}-{% endif %}</strong></span>
+  <span>·</span>
+  <span>Conf <strong>{{ accumulator_summary.average_confidence|floatformat:1 }}%</strong></span>
+  {% if accumulator_summary.fully_priced %}
+  <span class="acc-badge" style="background:var(--success-bg); border:1px solid var(--success-border); color:var(--success-text);">All priced</span>
+  {% else %}
+  <span class="acc-badge" style="background:var(--warning-bg); border:1px solid var(--warning-border); color:var(--warning-text);">Missing odds</span>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="top-picks-table-container">
+  {% if prediction %}
+    <div style="overflow-x:auto;">
+      <table class="top-picks-table" style="min-width:100%; text-align:left;">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Comp</th>
+            <th>Fixture</th>
+            <th class="text-center">Tip</th>
+            <th class="text-center">FT</th>
+            <th class="text-center">Odds</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in prediction %}
+          <tr>
+            <td style="font-weight:600; white-space:nowrap;">
+              <div>{{ p.match_date|date:"Y-m-d" }}</div>
+              {% if p.match_time %}
+              <div style="font-size:0.68rem; font-weight:400; color:var(--text-secondary);">{{ p.match_time }}</div>
+              {% endif %}
+            </td>
+            <td class="whitespace-nowrap">
+              <span class="competition-pill">
+                {% if p.competition_logo %}
+                <img src="{{ p.competition_logo }}" alt="{{ p.competition }}" class="competition-logo">
                 {% endif %}
-              </td>
-              <td class="whitespace-nowrap">
-                <span class="competition-pill">
-                  {% if p.competition_logo %}
-                  <img src="{{ p.competition_logo }}" alt="{{ p.competition }}" class="competition-logo">
+                <span>{{ p.competition }}</span>
+              </span>
+            </td>
+            <td class="team-cell">
+              <div style="display:flex; align-items:center; gap:0.75rem; min-width:0;">
+                <div class="team-line">
+                  {% if p.home_logo %}
+                  <img src="{{ p.home_logo }}" alt="{{ p.home_team }}" class="team-logo" style="border-radius:9999px; border:1px solid var(--border-color); padding:2px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';">
                   {% endif %}
-                  <span>{{ p.competition }}</span>
-                </span>
-              </td>
-              <td class="team-cell">
-                <div class="flex items-center gap-3 min-w-0">
-                  <div class="team-line">
-                    {% if p.home_logo %}
-                    <img src="{{ p.home_logo }}" alt="{{ p.home_team }}" class="team-logo rounded-full bg-white border border-gray-200 p-0.5" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';">
-                    {% endif %}
-                    <span class="team-badge" {% if p.home_logo %}style="display:none"{% endif %}>{{ p.home_initials }}</span>
-                    <span class="team-name">{{ p.home_team }}</span>
-                  </div>
-                  <span class="fixture-divider">vs</span>
-                  <div class="team-line">
-                    {% if p.away_logo %}
-                    <img src="{{ p.away_logo }}" alt="{{ p.away_team }}" class="team-logo rounded-full bg-white border border-gray-200 p-0.5" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';">
-                    {% endif %}
-                    <span class="team-badge" {% if p.away_logo %}style="display:none"{% endif %}>{{ p.away_initials }}</span>
-                    <span class="team-name">{{ p.away_team }}</span>
-                  </div>
+                  <span class="team-badge" {% if p.home_logo %}style="display:none"{% endif %}>{{ p.home_initials }}</span>
+                  <span class="team-name">{{ p.home_team }}</span>
                 </div>
-              </td>
-              <td class="text-center">
-                <span class="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full font-semibold whitespace-nowrap text-[0.74rem] {% if not p.actual_tip %}bg-blue-100 text-blue-700{% elif p.is_correct %}bg-green-100 text-green-700{% else %}bg-red-100 text-red-700{% endif %}">
-                  {{ p.tip }}
-                </span>
-              </td>
-              <td class="text-center font-semibold whitespace-nowrap">{{ p.confidence|floatformat:1 }}%</td>
-              <td class="text-center">
+                <span class="fixture-divider">vs</span>
+                <div class="team-line">
+                  {% if p.away_logo %}
+                  <img src="{{ p.away_logo }}" alt="{{ p.away_team }}" class="team-logo" style="border-radius:9999px; border:1px solid var(--border-color); padding:2px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';">
+                  {% endif %}
+                  <span class="team-badge" {% if p.away_logo %}style="display:none"{% endif %}>{{ p.away_initials }}</span>
+                  <span class="team-name">{{ p.away_team }}</span>
+                </div>
+              </div>
+              {% if p.reasons %}
+              <div class="reason-list">
+                {% for reason in p.reasons %}
+                <span class="reason-chip">{{ reason }}</span>
+                {% endfor %}
+              </div>
+              {% endif %}
+              {% if p.detail_url %}
+              <div style="margin-top:8px;">
+                <a href="{{ p.detail_url }}" style="font-size:0.72rem; font-weight:600; color:var(--blue); text-decoration:none;">View Match</a>
+              </div>
+              {% endif %}
+            </td>
+            <td style="text-align:center;">
+              <span style="display:inline-flex; align-items:center; justify-content:center; padding:2px 10px; border-radius:9999px; font-weight:600; white-space:nowrap; font-size:0.74rem; {% if not p.actual_tip %}background:var(--info-bg); color:var(--info-text);{% elif p.actual_tip == 'Refund' %}background:var(--warning-bg); color:var(--warning-text);{% elif p.is_correct %}background:var(--success-bg); color:var(--success-text);{% else %}background:var(--error-bg); color:var(--error-text);{% endif %}">
+                {{ p.tip }}
+              </span>
+            </td>
+            <td style="text-align:center; font-weight:600; white-space:nowrap;">
+              {% if p.actual_score %}
+              {{ p.actual_score }}
+              {% else %}
+              <span style="color:var(--text-secondary);">-</span>
+              {% endif %}
+            </td>
+            <td style="text-align:center;">
+              <div class="metric-stack">
                 {% if p.odds %}
-                <span class="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold whitespace-nowrap text-[0.74rem]">
+                <span style="display:inline-flex; align-items:center; justify-content:center; padding:2px 10px; border-radius:9999px; background:var(--warning-bg); border:1px solid var(--warning-border); color:var(--warning-text); font-weight:600; white-space:nowrap; font-size:0.74rem;">
                   {{ p.odds|floatformat:2 }}
                 </span>
                 {% else %}
-                <span class="text-gray-400">-</span>
+                <span style="color:var(--text-secondary);">-</span>
                 {% endif %}
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+                {% if p.edge %}
+                <span class="metric-subtle">Edge {{ p.edge|floatformat:1 }}%</span>
+                {% elif p.implied_probability %}
+                <span class="metric-subtle">Imp {{ p.implied_probability|floatformat:1 }}%</span>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page_obj and page_obj.paginator.num_pages > 1 %}
+    <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; padding:12px 16px; border-top:1px solid var(--border-color); background:var(--table-header-bg); font-size:0.875rem;">
+      <div style="color:var(--text-secondary);">
+        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
       </div>
-      {% if page_obj and page_obj.paginator.num_pages > 1 %}
-      <div class="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-200 bg-slate-50 text-sm">
-        <div class="text-gray-600">
-          Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
-        </div>
-        <div class="flex items-center gap-2">
-          {% if page_obj.has_previous %}
-          <a href="?match_date={{ selected_date|date:'Y-m-d' }}{% if filter_label %}&filter={{ filter_label|urlencode }}{% endif %}{% if show_past %}&past=1{% endif %}&page={{ page_obj.previous_page_number }}" class="px-3 py-1 rounded-full bg-white border border-gray-300 text-gray-700 hover:bg-gray-100">
-            Prev
-          </a>
-          {% endif %}
-          <span class="px-3 py-1 rounded-full bg-blue-600 text-white font-semibold">
-            {{ page_obj.number }}
-          </span>
-          {% if page_obj.has_next %}
-          <a href="?match_date={{ selected_date|date:'Y-m-d' }}{% if filter_label %}&filter={{ filter_label|urlencode }}{% endif %}{% if show_past %}&past=1{% endif %}&page={{ page_obj.next_page_number }}" class="px-3 py-1 rounded-full bg-white border border-gray-300 text-gray-700 hover:bg-gray-100">
-            Next
-          </a>
-          {% endif %}
-        </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        {% if page_obj.has_previous %}
+        <a href="?match_date={{ selected_date|date:'Y-m-d' }}&variant={{ variant }}{% if filter_label %}&filter={{ filter_label|urlencode }}{% endif %}{% if show_past %}&past=1{% endif %}&page={{ page_obj.previous_page_number }}" style="padding:4px 12px; border-radius:9999px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-primary); text-decoration:none;">
+          Prev
+        </a>
+        {% endif %}
+        <span style="padding:4px 12px; border-radius:9999px; background:var(--blue); color:#fff; font-weight:600;">
+          {{ page_obj.number }}
+        </span>
+        {% if page_obj.has_next %}
+        <a href="?match_date={{ selected_date|date:'Y-m-d' }}&variant={{ variant }}{% if filter_label %}&filter={{ filter_label|urlencode }}{% endif %}{% if show_past %}&past=1{% endif %}&page={{ page_obj.next_page_number }}" style="padding:4px 12px; border-radius:9999px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-primary); text-decoration:none;">
+          Next
+        </a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  {% else %}
+    <div style="padding:32px; text-align:center; color:var(--text-secondary); font-size:1rem;">
+      {% if not show_past and prediction_count_for_date %}
+      Predictions exist for {{ selected_date|date:"F j, Y" }}, but top picks have not been generated yet.
+      {% if can_generate_top_picks %}
+      <div style="margin-top:16px;">
+        <form method="post" action="{% url 'regenerate_top_picks' %}">
+          {% csrf_token %}
+          <input type="hidden" name="match_date" value="{{ selected_date|date:'Y-m-d' }}">
+          <input type="hidden" name="variant" value="{{ variant }}">
+          <button type="submit" style="padding:8px 16px; font-size:0.875rem; font-weight:500; border-radius:9999px; background:var(--blue); color:#fff; border:none; cursor:pointer;">
+            Generate Top Picks
+          </button>
+        </form>
+      </div>
+      {% else %}
+      <div style="margin-top:8px; font-size:0.875rem; color:var(--text-secondary);">
+        Top picks cannot be generated for this date from this page.
       </div>
       {% endif %}
-    {% else %}
-      <div class="p-8 text-center text-gray-500 text-lg">
-        No top picks found. Please check back later!
-      </div>
-    {% endif %}
-  </div>
+      {% else %}
+      No top picks found. Please check back later!
+      {% endif %}
+    </div>
+  {% endif %}
 </div>
+{% endblock %}
 
-<!-- Flatpickr JS -->
+{% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        flatpickr("#date-picker", {
-            dateFormat: "Y-m-d",
-            altInput: true,
-            altFormat: "F j, Y",
-            defaultDate: "{{ selected_date|date:'Y-m-d' }}",
-            onChange: function () {
-                document.getElementById('filter-form').submit();
-            }
-        });
+document.addEventListener('DOMContentLoaded', function () {
+  flatpickr("#date-picker", {
+    dateFormat: "Y-m-d",
+    altInput: true,
+    altFormat: "F j, Y",
+    defaultDate: "{{ selected_date|date:'Y-m-d' }}",
+    onChange: function () {
+      document.getElementById('filter-form').submit();
+    }
+  });
 
-        window.setTimeout(function () {
-            window.location.reload();
-        }, 300000);
-    });
+  window.setTimeout(function () {
+    window.location.reload();
+  }, 300000);
+});
 </script>
-
-</body>
-</html>
+{% endblock %}

@@ -1,0 +1,42 @@
+<form method="get">
+  <input type="hidden" name="group" value="{{ selected_group }}">
+  <input type="hidden" name="scope" value="{{ selected_scope }}">
+  <input type="hidden" name="sort" value="{{ selected_sort }}">
+  <input type="hidden" name="limit" value="{{ selected_limit }}">
+  <input type="hidden" name="view" value="{{ selected_view }}">
+  {% if priced_only %}<input type="hidden" name="priced" value="1">{% endif %}
+  <select name="market" class="form-select control-select" onchange="this.form.submit()">
+    {% for market in market_options %}
+    <option value="{{ market }}" {% if market == selected_market %}selected{% endif %}>{{ market }}</option>
+    {% endfor %}
+  </select>
+</form>
+<form method="get">
+  <input type="hidden" name="group" value="{{ selected_group }}">
+  <input type="hidden" name="scope" value="{{ selected_scope }}">
+  <input type="hidden" name="market" value="{{ selected_market }}">
+  <input type="hidden" name="limit" value="{{ selected_limit }}">
+  <input type="hidden" name="view" value="{{ selected_view }}">
+  {% if priced_only %}<input type="hidden" name="priced" value="1">{% endif %}
+  <select name="sort" class="form-select control-select" onchange="this.form.submit()">
+    {% for sort_option in market_sort_options %}
+    <option value="{{ sort_option.key }}" {% if sort_option.key == selected_sort %}selected{% endif %}>{{ sort_option.label }}</option>
+    {% endfor %}
+  </select>
+</form>
+<form method="get">
+  <input type="hidden" name="group" value="{{ selected_group }}">
+  <input type="hidden" name="scope" value="{{ selected_scope }}">
+  <input type="hidden" name="market" value="{{ selected_market }}">
+  <input type="hidden" name="sort" value="{{ selected_sort }}">
+  <input type="hidden" name="view" value="{{ selected_view }}">
+  {% if priced_only %}<input type="hidden" name="priced" value="1">{% endif %}
+  <select name="limit" class="form-select control-select" onchange="this.form.submit()">
+    {% for limit_option in market_limit_options %}
+    <option value="{{ limit_option.key }}" {% if limit_option.key == selected_limit %}selected{% endif %}>{{ limit_option.label }}</option>
+    {% endfor %}
+  </select>
+</form>
+<a class="pill-link" href="{% url 'export_market_picks' format='csv' %}?group={{ selected_group }}&scope={{ selected_scope }}&sort={{ selected_sort }}&limit={{ selected_limit }}&{% if priced_only %}priced=1&{% endif %}market={{ selected_market|urlencode }}">Export CSV</a>
+<a class="pill-link" href="{% url 'export_market_picks' format='pdf' %}?group={{ selected_group }}&scope={{ selected_scope }}&sort={{ selected_sort }}&limit={{ selected_limit }}&{% if priced_only %}priced=1&{% endif %}market={{ selected_market|urlencode }}">Export PDF</a>
+<a class="pill-link" href="{% url 'top_picks' %}">Back To Top Picks</a>

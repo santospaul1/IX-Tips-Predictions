@@ -1,81 +1,177 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>View Predictions</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
-    <style>
-        body {
-            background-color: #f8f9fa;
-            padding: 2rem;
-        }
-        .form-inline label {
-            margin-right: 0.5rem;
-        }
-        table th, table td {
-            vertical-align: middle;
-        }
-    </style>
-</head>
-<body>
-<div class="container">
-    <h2>Match Predictions</h2>
+{% extends "predict/base_prediction_page.html" %}
 
-    <form method="get" class="form-inline my-3">
-        <div class="form-group mr-2">
-            <label for="competition">Competition:</label>
-            <input type="text" name="competition" id="competition" class="form-control ml-2" value="{{ competition }}">
-        </div>
-        <div class="form-group mr-2">
-            <label for="date">Match Date:</label>
-            <input type="date" name="date" id="date" class="form-control ml-2" value="{{ date }}">
-        </div>
-        <button type="submit" class="btn btn-primary">Filter</button>
-        <a href="{% url 'view_predictions' %}" class="btn btn-secondary ml-2">Clear</a>
-    </form>
+{% block page_title %}IX-Tips - View Predictions{% endblock %}
 
-    {% if predictions %}
-        <table class="table table-bordered table-striped">
-            <thead class="thead-dark">
-                <tr>
-                    <th>Date</th>
-                    <th>Competition</th>
-                    <th>Match</th>
-                    <th>Predicted</th>
-                    <th>Actual</th>
-                    <th>Accuracy</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for p in predictions %}
-                <tr>
-                    <td>{{ p.match_date }}</td>
-                    <td>{{ p.competition }}</td>
-                    <td>{{ p.home_team }} vs {{ p.away_team }}</td>
-                    <td>{{ p.predicted_home_goals }} - {{ p.predicted_away_goals }}</td>
-                    <td>
-                        {% if p.actual_home_goals is not None %}
-                            {{ p.actual_home_goals }} - {{ p.actual_away_goals }}
-                        {% else %}
-                            Not Available
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if p.is_accurate == True %}
-                            ✅
-                        {% elif p.is_accurate == False %}
-                            ❌
-                        {% else %}
-                            ⚠️ Pending
-                        {% endif %}
-                    </td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    {% else %}
-        <div class="alert alert-warning">No predictions found for the given filters.</div>
-    {% endif %}
+{% block page_styles %}
+{% include "predict/partials/prediction_shell_styles.html" %}
+{% include "predict/partials/prediction_component_styles.html" %}
+.filter-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+}
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 160px;
+}
+.filter-group label {
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+.filter-group input {
+  min-height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  padding: 0 10px;
+}
+.predictions-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--text-primary);
+}
+.predictions-table th {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: var(--table-header-bg);
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+.predictions-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.88rem;
+  vertical-align: middle;
+}
+.predictions-table tbody tr:last-child td { border-bottom: none; }
+.predictions-table tbody tr { transition: background 0.15s ease; }
+.predictions-table tbody tr:hover { background: var(--hover-bg); }
+.accuracy-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.accuracy-pill.correct {
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
+  color: var(--success-text);
+}
+.accuracy-pill.wrong {
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  color: var(--error-text);
+}
+.accuracy-pill.pending {
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  color: var(--warning-text);
+}
+.table-wrapper {
+  overflow-x: auto;
+  border-radius: 18px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+}
+@media (max-width: 767px) {
+  .filter-form { flex-direction: column; }
+  .predictions-table th, .predictions-table td { padding: 9px 10px; font-size: 0.82rem; }
+  .hide-mobile { display: none; }
+}
+{% endblock %}
+
+{% block sidebar %}
+{% include "predict/partials/prediction_menu_block.html" with active_page="view_predictions" %}
+{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <div>
+    <h1 class="section-title">Match Predictions</h1>
+    <div class="section-subtitle">Filter and browse stored predictions.</div>
+  </div>
 </div>
-</body>
-</html>
+{% endblock %}
+
+{% block page_content %}
+<form method="get" class="filter-form">
+  <div class="filter-group">
+    <label for="competition">Competition</label>
+    <input type="text" name="competition" id="competition" placeholder="e.g. PL" value="{{ competition }}">
+  </div>
+  <div class="filter-group">
+    <label for="date">Match Date</label>
+    <input type="date" name="date" id="date" value="{{ date }}">
+  </div>
+  <div style="display:flex; gap:8px; align-items:flex-end; padding-bottom:1px;">
+    <button type="submit" class="pill-link header-button">Filter</button>
+    <a href="{% url 'view_predictions' %}" class="pill-link">Clear</a>
+  </div>
+</form>
+
+{% if predictions %}
+<div class="table-wrapper">
+  <table class="predictions-table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Fixture</th>
+        <th class="hide-mobile">Competition</th>
+        <th>Predicted</th>
+        <th>Actual</th>
+        <th>Accuracy</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in predictions %}
+      <tr>
+        <td style="white-space:nowrap; color:var(--text-secondary); font-size:0.82rem;">{{ p.match_date }}</td>
+        <td style="font-weight:600;">{{ p.home_team }} <span style="color:var(--text-secondary);font-weight:400;">vs</span> {{ p.away_team }}</td>
+        <td class="hide-mobile" style="font-size:0.82rem; color:var(--text-secondary);">{{ p.competition }}</td>
+        <td style="font-family:monospace; font-weight:700; letter-spacing:0.04em;">{{ p.predicted_home_goals }} – {{ p.predicted_away_goals }}</td>
+        <td style="font-family:monospace; font-weight:700; letter-spacing:0.04em;">
+          {% if p.actual_home_goals is not None %}
+            {{ p.actual_home_goals }} – {{ p.actual_away_goals }}
+          {% else %}
+            <span style="color:var(--text-secondary);">—</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if p.is_accurate == True %}
+            <span class="accuracy-pill correct">Correct</span>
+          {% elif p.is_accurate == False %}
+            <span class="accuracy-pill wrong">Wrong</span>
+          {% else %}
+            <span class="accuracy-pill pending">Pending</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div style="padding: 32px; text-align: center; color: var(--text-secondary); background: var(--card-bg); border: 1px dashed var(--border-color); border-radius: 18px;">
+  No predictions found for the given filters.
+</div>
+{% endif %}
+{% endblock %}

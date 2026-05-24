@@ -1,48 +1,71 @@
-<div class="col-lg-2 col-md-3">
-      <div class="sidebar-right">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <h5>League Table</h5>
-          <form method="get" class="ms-2">
-            <select name="competition" class="form-select form-select-sm" onchange="this.form.submit()">
-              {% for code, name in competitions.items %}
-                <option value="{{ code }}" {% if selected_competition == code %}selected{% endif %}>{{ name }}</option>
-              {% endfor %}
-            </select>
-          </form>
-        </div>
-        <div class="table-responsive">
-          <table class="table table-sm table-striped table-bordered" style="font-size: 0.88rem;">
-            <thead class="table-light">
-              <tr>
-                <th>#</th>
-                <th>Team</th>
-                <th>PT</th>
-                <th>P</th>
-                <th>W</th>
-                <th>D</th>
-                <th>L</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for row in league_table %}
-              <tr>
-                <td>{{ forloop.counter }}</td>
-                <td class="text-nowrap">
-                  <img src="{{ row.team.crest }}" class="team-logo me-1" alt="{{ row.team.shortName }}" style="width: 20px; height: 20px;">
-                  {{ row.team.shortName }}
-                </td>
-                <td>{{ row.points }}</td>
-                <td>{{ row.playedGames }}</td>
-                <td>{{ row.won }}</td>
-                <td>{{ row.draw }}</td>
-                <td>{{ row.lost }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
+<div class="league-sidebar">
+  <div class="sidebar-right">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h5>League Table</h5>
+      <form method="get">
+        <select id="competition-select" name="competition" class="form-select form-select-sm" onchange="this.form.submit()">
+          {% for code, name in competitions.items %}
+            <option value="{{ code }}" {% if selected_competition == code %}selected{% endif %}>{{ name }}</option>
+          {% endfor %}
+        </select>
+      </form>
     </div>
-
+    <div id="league-table-container" class="table-responsive">
+      <table class="table table-sm table-striped table-bordered mb-0" style="font-size: 0.78rem;">
+        <thead class="league-table-header">
+          <tr>
+            <th>#</th>
+            <th>Team</th>
+            <th>PT</th>
+            <th class="lt-extra">P</th>
+            <th class="lt-extra">W</th>
+            <th class="lt-extra">D</th>
+            <th class="lt-extra">L</th>
+            <th class="lt-extra">GD</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in league_table %}
+          <tr>
+            <td>{{ forloop.counter }}</td>
+            <td class="text-nowrap">
+              <img src="{{ row.team.crest }}" class="team-logo me-1" alt="{{ row.team.shortName }}" style="width: 18px; height: 18px;">
+              {{ row.team.shortName }}
+            </td>
+            <td>{{ row.points }}</td>
+            <td class="lt-extra">{{ row.playedGames }}</td>
+            <td class="lt-extra">{{ row.won }}</td>
+            <td class="lt-extra">{{ row.draw }}</td>
+            <td class="lt-extra">{{ row.lost }}</td>
+            <td class="lt-extra">{{ row.goalDifference }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
+
+<style>
+.lt-extra { display: none; }
+#dash-row.league-expanded .lt-extra { display: table-cell; }
+
+html body.dark .league-table-header {
+  background: var(--table-header-bg) !important;
+  color: var(--text-primary) !important;
+}
+html body.dark .table.table-striped > tbody > tr:nth-of-type(odd) > * {
+  background-color: var(--hover-bg) !important;
+}
+html body.dark .table.table-striped > tbody > tr:nth-of-type(even) > * {
+  background-color: var(--card-bg) !important;
+}
+html body.dark .table.table-bordered > * {
+  border-color: var(--border-color) !important;
+}
+html body.dark .table td,
+html body.dark .table th {
+  color: var(--text-primary) !important;
+}
+</style>
+

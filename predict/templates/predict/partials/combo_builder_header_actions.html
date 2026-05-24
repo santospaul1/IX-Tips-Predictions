@@ -1,0 +1,5 @@
+<a href="{% url 'combo_history' %}" class="header-link">View Combo History</a>
+<form method="post" action="{% url 'generate_all_combo_slips' %}">
+  {% csrf_token %}
+  <button type="submit" class="header-button">Generate All Combos</button>
+</form>

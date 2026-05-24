@@ -4,15 +4,16 @@ from celery import shared_task
 from django.core.cache import cache
 
 from .constants import API_TOKEN, COMPETITIONS, TRAINING_CACHE_TIMEOUT
-from .models import MatchPrediction
+from .models import MatchPrediction, TopPick
 from .utils import (
     fetch_and_cache_team_metadata,
     fetch_matches_by_date,
     fetch_training_data_all_seasons,
     find_next_match_date,
+    find_upcoming_match_dates,
     get_league_table,
     get_or_train_model_bundle,
-    get_top_predictions,
+    get_top_predictions_for_variant,
     save_predictions,
     store_top_pick_for_date
 )
@@ -34,21 +35,21 @@ def trigger_staggered_scheduling():
 
 @shared_task
 def predict_next_fixtures_for_competition(competition_code, match_date=None):
-     
+    from .views import refresh_competition_odds
+
     print(f"[INFO] Running prediction for {competition_code} on {match_date if match_date else 'auto'}")
 
     if not match_date:
-        match_date_to_use = find_next_match_date(fetch_matches_by_date, None, [competition_code])
-        if not match_date_to_use:
+        match_dates_to_use = find_upcoming_match_dates(
+            fetch_matches_by_date,
+            None,
+            competition_code,
+            days_ahead=7,
+        )
+        if not match_dates_to_use:
             return
     else:
-        match_date_to_use = match_date
-
-    print(f"[INFO] Processing competition: {competition_code} for {match_date_to_use}")
-    matches = fetch_matches_by_date(API_TOKEN, competition_code, match_date_to_use)
-    if not matches:
-        print(f"[WARN] No matches found for {competition_code} on {match_date_to_use}")
-        return
+        match_dates_to_use = [match_date]
 
     df = cache.get(f"training_data_{competition_code}")
     if df is None:
@@ -65,13 +66,27 @@ def predict_next_fixtures_for_competition(competition_code, match_date=None):
         return
     model_home, model_away, model_context = model_bundle
 
-    predictions = save_predictions(
-        matches, model_home, model_away, model_context,
-        match_date=match_date_to_use,
-        competition_code=competition_code
-    )
+    total_saved = 0
+    for match_date_to_use in match_dates_to_use:
+        print(f"[INFO] Processing competition: {competition_code} for {match_date_to_use}")
+        matches = fetch_matches_by_date(API_TOKEN, competition_code, match_date_to_use)
+        if not matches:
+            print(f"[WARN] No matches found for {competition_code} on {match_date_to_use}")
+            continue
 
-    print(f"[INFO] Saved {len(predictions)} predictions for {competition_code}")
+        predictions = save_predictions(
+            matches, model_home, model_away, model_context,
+            match_date=match_date_to_use,
+            competition_code=competition_code
+        )
+        total_saved += len(predictions)
+        refresh_competition_odds(
+            competition_code,
+            force=True,
+            match_dates=[date.fromisoformat(match_date_to_use)],
+        )
+
+    print(f"[INFO] Saved {total_saved} predictions for {competition_code} across {len(match_dates_to_use)} date(s)")
 
 @shared_task
 def cache_training_data():
@@ -102,16 +117,23 @@ def update_metadata_task():
 
 @shared_task
 def store_daily_top_pick():
-    predictions = get_top_predictions(limit=10)
-    store_top_pick_for_date(predictions)
+    stored = {}
+    for variant in ("1", "2", "3", "4"):
+        TopPick.objects.filter(variant=variant, match_date__gte=date.today()).delete()
+        predictions = get_top_predictions_for_variant(limit=(20 if variant == "4" else 10), variant=variant)
+        stored[variant] = store_top_pick_for_date(predictions, variant=variant)
+    return stored
 
 @shared_task
 def refresh_daily_odds_cache():
     from .views import update_all_odds
 
     updated = update_all_odds()
-    top_predictions = get_top_predictions(limit=10)
-    stored_top_picks = store_top_pick_for_date(top_predictions)
+    stored_top_picks = {}
+    for variant in ("1", "2", "3", "4"):
+        TopPick.objects.filter(variant=variant, match_date__gte=date.today()).delete()
+        top_predictions = get_top_predictions_for_variant(limit=(20 if variant == "4" else 10), variant=variant)
+        stored_top_picks[variant] = store_top_pick_for_date(top_predictions, variant=variant)
     return {
         "odds_updates": updated,
         "stored_top_picks": stored_top_picks,
@@ -140,11 +162,21 @@ def refresh_live_match_data():
             continue
         status_updates += refresh_prediction_statuses(competition, match_date, force=True)
 
-    top_predictions = get_top_predictions(limit=10)
-    stored_top_picks = store_top_pick_for_date(top_predictions)
+    stored_top_picks = {}
+    for variant in ("1", "2", "3", "4"):
+        TopPick.objects.filter(variant=variant, match_date__gte=today).delete()
+        top_predictions = get_top_predictions_for_variant(limit=(20 if variant == "4" else 10), variant=variant)
+        stored_top_picks[variant] = store_top_pick_for_date(top_predictions, variant=variant)
 
     return {
         "status_updates": status_updates,
         "stored_top_picks": stored_top_picks,
         "dates_checked": [str(entry["match_date"]) for entry in refresh_pairs],
     }
+
+
+@shared_task
+def refresh_combo_slips():
+    from .views import generate_all_combo_slips
+
+    return generate_all_combo_slips()

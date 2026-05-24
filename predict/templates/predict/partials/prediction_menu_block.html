@@ -1,0 +1,36 @@
+<div class="sidebar-panel">
+  <a href="https://www.buymeacoffee.com/santos1252" target="_blank" class="bmc-link bmc-expanded">
+    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee">
+  </a>
+  <a href="https://www.buymeacoffee.com/santos1252" target="_blank" class="bmc-link bmc-collapsed" title="Buy Me A Coffee">
+    <i class='bx bxs-coffee' style="font-size:1.1rem;color:#FFDD00;"></i>
+  </a>
+  <div class="sidebar-divider"></div>
+  <div class="sidebar-title">Menu</div>
+  <div class="menu-list">
+    <a class="menu-link {% if active_page == 'predictions' %}active{% endif %}" href="{% url 'predictions_view' %}" title="Match Predictions">
+      <i class='bx bx-football menu-icon'></i><span class="menu-text">Match Predictions</span>
+    </a>
+    <a class="menu-link {% if active_page == 'top_picks' %}active{% endif %}" href="{% url 'top_picks' %}" title="Top Picks">
+      <i class='bx bxs-star menu-icon'></i><span class="menu-text">Top Picks</span>
+    </a>
+    <a class="menu-link {% if active_page == 'correct_score' %}active{% endif %}" href="{% url 'correct_score' %}" title="Correct Score">
+      <i class='bx bx-target-lock menu-icon'></i><span class="menu-text">Correct Score</span>
+    </a>
+    <a class="menu-link {% if active_page == 'anytime_scorer' %}active{% endif %}" href="{% url 'anytime_scorer' %}" title="Anytime Scorer">
+      <i class='bx bx-run menu-icon'></i><span class="menu-text">Anytime Scorer</span>
+    </a>
+    <a class="menu-link {% if active_page == 'market_picks' %}active{% endif %}" href="{% url 'market_picks' %}" title="Market Picks">
+      <i class='bx bx-trending-up menu-icon'></i><span class="menu-text">Market Picks</span>
+    </a>
+    <a class="menu-link {% if active_page == 'combo_builder' %}active{% endif %}" href="{% url 'combo_builder' %}" title="Combo Builder">
+      <i class='bx bx-layer menu-icon'></i><span class="menu-text">Combo Builder</span>
+    </a>
+    <a class="menu-link {% if active_page == 'combo_history' %}active{% endif %}" href="{% url 'combo_history' %}" title="Combo History">
+      <i class='bx bx-history menu-icon'></i><span class="menu-text">Combo History</span>
+    </a>
+    <a class="menu-link {% if active_page == 'won_slips' %}active{% endif %}" href="{% url 'won_slips' %}" title="Won Slips">
+      <i class='bx bx-trophy menu-icon'></i><span class="menu-text">Won Slips</span>
+    </a>
+  </div>
+</div>

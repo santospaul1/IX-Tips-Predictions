@@ -62,6 +62,12 @@ def setup_scheduled_tasks():
         minute="20",
     )
     ensure_periodic_task(
+        name="Refresh Combo Slips Daily",
+        task="predict.tasks.refresh_combo_slips",
+        hour="6",
+        minute="30",
+    )
+    ensure_periodic_task(
         name="Refresh League Standings",
         task="predict.tasks.refresh_all_league_tables",
         minute="1",

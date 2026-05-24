@@ -1,0 +1,408 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IX-Tips - Match Detail</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background:
+        radial-gradient(circle at top left, rgba(59, 130, 246, 0.08), transparent 28%),
+        linear-gradient(180deg, #f8fbff 0%, #f3f6fb 48%, #eef3f8 100%);
+      font-family: 'Inter', sans-serif;
+      color: #0f172a;
+    }
+    .page-shell, .panel, .hero-card {
+      background: rgba(255, 255, 255, 0.96);
+      border: 1px solid rgba(226, 232, 240, 0.9);
+      border-radius: 22px;
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+      backdrop-filter: blur(10px);
+    }
+    .page-shell, .panel, .hero-card { padding: 22px; }
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 18px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .title {
+      font-size: clamp(1.9rem, 3vw, 2.4rem);
+      font-weight: 800;
+      margin: 0;
+    }
+    .subtitle {
+      color: #64748b;
+      margin-top: 6px;
+      font-size: 0.98rem;
+    }
+    .pill-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      border: 1px solid #cbd5e1;
+      background: #fff;
+      color: #1e293b;
+      text-decoration: none;
+      font-size: 0.92rem;
+      font-weight: 600;
+    }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1.7fr 1fr;
+      gap: 18px;
+      margin-bottom: 20px;
+    }
+    .hero-card {
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-card::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 5px;
+      background: linear-gradient(180deg, #2563eb 0%, #7c3aed 100%);
+    }
+    .competition-line {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: #475569;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .competition-logo, .team-logo {
+      width: 28px;
+      height: 28px;
+      object-fit: contain;
+    }
+    .matchup {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .team-block {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.15rem;
+      font-weight: 800;
+    }
+    .vs-chip {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #eff6ff;
+      color: #2563eb;
+      font-weight: 800;
+    }
+    .score-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 48px;
+      padding: 10px 18px;
+      border-radius: 999px;
+      font-weight: 800;
+      border: 1px solid #93c5fd;
+      background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
+      color: #1d4ed8;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .meta-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 14px;
+    }
+    .meta-label {
+      font-size: 0.74rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #64748b;
+      margin-bottom: 8px;
+    }
+    .meta-value {
+      font-size: 1rem;
+      font-weight: 800;
+      color: #0f172a;
+    }
+    .section-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 18px;
+    }
+    .panel-title {
+      font-size: 1.05rem;
+      font-weight: 800;
+      margin-bottom: 14px;
+    }
+    .market-list, .scoreline-list, .stat-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .market-row, .stat-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+    }
+    .market-main {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+    }
+    .market-name {
+      font-weight: 800;
+      color: #0f172a;
+    }
+    .reason-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .reason-chip, .score-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #1e3a8a;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+    .score-chip.primary {
+      background: #dbeafe;
+      color: #1d4ed8;
+    }
+    .metric-col {
+      text-align: right;
+      min-width: 92px;
+    }
+    .metric-value {
+      font-size: 0.94rem;
+      font-weight: 800;
+      color: #0f172a;
+    }
+    .metric-note {
+      color: #64748b;
+      font-size: 0.76rem;
+    }
+    .source-note {
+      color: #475569;
+      font-size: 0.74rem;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+    .scorer-main {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #dcfce7 0%, #effcf5 100%);
+      border: 1px solid #86efac;
+      color: #047857;
+      font-weight: 800;
+      margin-bottom: 12px;
+    }
+    .alternate-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .alternate-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid #e2e8f0;
+      background: #f8fafc;
+      color: #475569;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    @media (max-width: 991px) {
+      .hero-grid, .section-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container-fluid py-3">
+    <div class="container px-0">
+      <div class="page-shell">
+        <div class="page-header">
+          <div>
+            <h1 class="title">Match Detail</h1>
+            <div class="subtitle">A deeper read on the fixture, markets, scorelines, and scorer angles.</div>
+          </div>
+          <div class="d-flex gap-2 flex-wrap">
+            <a href="{% if source == 'top_picks' %}{% url 'top_picks' %}{% elif source == 'correct_score' %}{% url 'correct_score' %}{% elif source == 'anytime_scorer' %}{% url 'anytime_scorer' %}{% else %}{% url 'predictions_view' %}{% endif %}" class="pill-link">Back</a>
+          </div>
+        </div>
+
+        <div class="hero-grid">
+          <div class="hero-card">
+            <div class="competition-line">
+              {% if competition_logo %}<img src="{{ competition_logo }}" alt="{{ competition_name }}" class="competition-logo">{% endif %}
+              <span>{{ competition_name }}</span>
+              <span class="text-muted">{{ prediction.match_date }}{% if match_time %} · {{ match_time }}{% endif %}</span>
+            </div>
+            <div class="matchup">
+              <div class="team-block">
+                {% if home_logo %}<img src="{{ home_logo }}" alt="{{ home_team }}" class="team-logo">{% endif %}
+                <span>{{ home_team }}</span>
+              </div>
+              <span class="vs-chip">vs</span>
+              <div class="team-block">
+                {% if away_logo %}<img src="{{ away_logo }}" alt="{{ away_team }}" class="team-logo">{% endif %}
+                <span>{{ away_team }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="meta-grid">
+              <div class="meta-box">
+                <div class="meta-label">Predicted Score</div>
+                <div class="meta-value">{{ predicted_score }}</div>
+              </div>
+              <div class="meta-box">
+                <div class="meta-label">Actual Result</div>
+                <div class="meta-value">{% if actual_result %}{{ actual_result }}{% else %}-:-{% endif %}</div>
+              </div>
+              <div class="meta-box">
+                <div class="meta-label">Status</div>
+                <div class="meta-value">{{ prediction.status }}</div>
+              </div>
+              <div class="meta-box">
+                <div class="meta-label">Best Market</div>
+                <div class="meta-value">{% if market_rows %}{{ market_rows.0.market }}{% else %}-{% endif %}</div>
+              </div>
+              <div class="meta-box">
+                <div class="meta-label">Bookmaker</div>
+                <div class="meta-value">{% if bookmaker %}{{ bookmaker }}{% else %}-{% endif %}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-grid">
+          <div class="panel">
+            <div class="panel-title">Ranked Markets</div>
+            <div class="market-list">
+              {% for row in market_rows %}
+              <div class="market-row">
+                <div class="market-main">
+                  <div class="market-name">{{ row.market }}</div>
+                  {% if row.reasons %}
+                  <div class="reason-row">
+                    {% for reason in row.reasons %}
+                    <span class="reason-chip">{{ reason }}</span>
+                    {% endfor %}
+                  </div>
+                  {% endif %}
+                </div>
+                <div class="metric-col">
+                  <div class="metric-value">{{ row.confidence|floatformat:1 }}%</div>
+                  {% if row.odds %}
+                  <div class="metric-note">Odds {{ row.odds|floatformat:2 }}</div>
+                  {% endif %}
+                  {% if row.market_source %}
+                  <div class="source-note">{{ row.market_source }}</div>
+                  {% endif %}
+                  {% if row.edge %}
+                  <div class="metric-note">Edge {{ row.edge|floatformat:1 }}%</div>
+                  {% elif row.implied_probability %}
+                  <div class="metric-note">Imp {{ row.implied_probability|floatformat:1 }}%</div>
+                  {% endif %}
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title">Correct Score Angles</div>
+            <div class="scoreline-list">
+              {% for score in scorelines %}
+              <div class="market-row">
+                <div class="market-main">
+                  <div class="score-chip {% if forloop.first %}primary{% endif %}">{{ score.score }}</div>
+                </div>
+                <div class="metric-col">
+                  <div class="metric-value">{{ score.percent|floatformat:1 }}%</div>
+                  <div class="metric-note">top {{ score.top_share_percent|floatformat:1 }}%</div>
+                </div>
+              </div>
+              {% empty %}
+              <div class="market-row"><div class="market-main">No scorelines available.</div></div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title">Form And Matchup Snapshot</div>
+            <div class="stat-list">
+              <div class="stat-row"><span>Home recent scored</span><strong>{{ feature_snapshot.home_recent_scored }}</strong></div>
+              <div class="stat-row"><span>Away recent scored</span><strong>{{ feature_snapshot.away_recent_scored }}</strong></div>
+              <div class="stat-row"><span>Home recent conceded</span><strong>{{ feature_snapshot.home_recent_conceded }}</strong></div>
+              <div class="stat-row"><span>Away recent conceded</span><strong>{{ feature_snapshot.away_recent_conceded }}</strong></div>
+              <div class="stat-row"><span>Form gap</span><strong>{{ feature_snapshot.form_gap }}</strong></div>
+              <div class="stat-row"><span>Elo gap</span><strong>{{ feature_snapshot.elo_gap }}</strong></div>
+              <div class="stat-row"><span>H2H goals avg</span><strong>{{ feature_snapshot.h2h_total_goals }}</strong></div>
+              <div class="stat-row"><span>H2H matches used</span><strong>{{ feature_snapshot.h2h_match_count }}</strong></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title">Scorer Angle</div>
+            {% if scorer_row %}
+              <div class="scorer-main">
+                {{ scorer_row.top_pick.name }}{% if scorer_row.top_pick.goals %} · {{ scorer_row.top_pick.goals }} goals{% endif %}
+              </div>
+              <div class="text-muted mb-3">{{ scorer_row.top_pick.team }} · {% if scorer_row.top_pick.side == "home" %}Home lean{% else %}Away lean{% endif %}</div>
+              {% if scorer_row.alternates %}
+              <div class="alternate-row">
+                {% for player in scorer_row.alternates %}
+                <span class="alternate-chip">{{ player.name }}{% if player.goals %} · {{ player.goals }}{% endif %}</span>
+                {% endfor %}
+              </div>
+              {% endif %}
+            {% else %}
+              <div class="text-muted">No scorer angle available for this fixture yet.</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
