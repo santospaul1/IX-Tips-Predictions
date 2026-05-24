@@ -12,5 +12,4 @@ COPY . /code/
 
 EXPOSE 8080
 
-# collectstatic runs at startup so SECRET_KEY env var is available
-CMD ["sh", "-c", "python manage.py collectstatic --noinput && python manage.py migrate --run-syncdb && gunicorn score_predictor.wsgi --bind 0.0.0.0:8080 --log-file - --workers 2 --timeout 120"]
+CMD ["gunicorn", "--bind", ":8080", "--workers", "2", "--timeout", "120", "score_predictor.wsgi"]

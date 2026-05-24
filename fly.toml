@@ -1,24 +1,32 @@
-app = "ix-tips-predictions"
-primary_region = "jnb"
+app = 'ix-tips-predictions'
+primary_region = 'jnb'
+console_command = '/code/manage.py shell'
 
 [build]
   dockerfile = "Dockerfile"
 
+[deploy]
+  release_command = 'python manage.py collectstatic --noinput && python manage.py migrate --noinput'
+
 [processes]
-  app    = "sh -c 'python manage.py migrate --run-syncdb && gunicorn score_predictor.wsgi --bind 0.0.0.0:8080 --workers 2 --timeout 120'"
-  worker = "celery -A score_predictor worker --loglevel=info --concurrency=2"
-  beat   = "celery -A score_predictor beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler"
+  app    = 'gunicorn --bind :8080 --workers 2 score_predictor.wsgi'
+  celery = 'celery -A score_predictor worker --loglevel=INFO --concurrency=2'
+  beat   = 'celery -A score_predictor beat --loglevel=INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler'
 
 [http_service]
   internal_port = 8080
-  force_https   = true
-  auto_stop_machines  = true
+  force_https = true
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
-  processes = ["app"]
+  processes = ['app']
 
 [[vm]]
-  memory = "256mb"
-  cpu_kind = "shared"
+  memory = '1gb'
+  cpu_kind = 'shared'
   cpus = 1
-  processes = ["app", "worker", "beat"]
+  processes = ['app', 'celery', 'beat']
+
+[[statics]]
+  guest_path = '/code/staticfiles'
+  url_prefix = '/static/'
