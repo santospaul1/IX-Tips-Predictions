@@ -144,17 +144,28 @@ FOOTBALL_DATA_BASE_URL = os.environ.get(
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
+# Upstash and other managed Redis providers use rediss:// (TLS)
+_REDIS_USE_SSL = REDIS_URL.startswith("rediss://")
+_REDIS_SSL_OPTS = {"ssl_cert_reqs": None} if _REDIS_USE_SSL else {}
+
 CELERY_BROKER_URL = REDIS_URL
+CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_TIMEZONE = "Africa/Nairobi"
 CELERY_ENABLE_UTC = False
+if _REDIS_USE_SSL:
+    CELERY_BROKER_USE_SSL = _REDIS_SSL_OPTS
+    CELERY_REDIS_BACKEND_USE_SSL = _REDIS_SSL_OPTS
 
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
         "LOCATION": REDIS_URL,
-        "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "CONNECTION_POOL_KWARGS": _REDIS_SSL_OPTS,
+        },
     }
 }
 
