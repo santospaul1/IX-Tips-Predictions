@@ -1347,10 +1347,13 @@ def get_team_recent_form(team_name, competition_code, limit=5):
 
 
 def get_or_train_model_bundle(competition_code, force_refresh=False):
+    from django.core.cache import caches
+    model_store = caches["model_cache"]
     cache_key = model_cache_key(competition_code)
+
     if not force_refresh:
         try:
-            cached_bundle = cache.get(cache_key)
+            cached_bundle = model_store.get(cache_key)
             if (
                 isinstance(cached_bundle, tuple)
                 and len(cached_bundle) == 3
@@ -1360,7 +1363,7 @@ def get_or_train_model_bundle(competition_code, force_refresh=False):
             ):
                 return cached_bundle
         except Exception as e:
-            print(f"[WARN] Could not read model bundle from cache for {competition_code}: {e}")
+            print(f"[WARN] Could not read model bundle from file cache for {competition_code}: {e}")
 
     training_df = fetch_training_data_all_seasons(competition_code)
     if training_df.empty:
@@ -1368,9 +1371,9 @@ def get_or_train_model_bundle(competition_code, force_refresh=False):
 
     bundle = train_competition_models(training_df)
     try:
-        cache.set(cache_key, bundle, timeout=MODEL_CACHE_TIMEOUT)
+        model_store.set(cache_key, bundle, timeout=MODEL_CACHE_TIMEOUT)
     except Exception as e:
-        print(f"[WARN] Could not cache model bundle for {competition_code}: {e}")
+        print(f"[WARN] Could not store model bundle in file cache for {competition_code}: {e}")
     return bundle
 
 

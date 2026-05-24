@@ -160,6 +160,7 @@ if _REDIS_USE_SSL:
     CELERY_REDIS_BACKEND_USE_SSL = _REDIS_SSL_OPTS
 
 CACHES = {
+    # Redis — sessions, odds, small data
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
         "LOCATION": REDIS_URL,
@@ -167,7 +168,13 @@ CACHES = {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
             "CONNECTION_POOL_KWARGS": _REDIS_SSL_OPTS,
         },
-    }
+    },
+    # File-based — large ML model bundles (sklearn models exceed Upstash 1MB limit)
+    "model_cache": {
+        "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+        "LOCATION": "/tmp/ix_tips_model_cache",
+        "TIMEOUT": 86400,  # 24 hours
+    },
 }
 
 # ── Django REST Framework ─────────────────────────────────────────────────────
