@@ -1346,11 +1346,20 @@ def get_team_recent_form(team_name, competition_code, limit=5):
     return ["W" if p == 3 else "D" if p == 1 else "L" for p in points]
 
 
+# In-process model registry — survives for the lifetime of the gunicorn worker.
+# Avoids file I/O and Redis on every request after the first load.
+_MODEL_REGISTRY: dict = {}
+
 def get_or_train_model_bundle(competition_code, force_refresh=False):
     from django.core.cache import caches
+
+    # L1 — in-process memory (instant, zero network)
+    if not force_refresh and competition_code in _MODEL_REGISTRY:
+        return _MODEL_REGISTRY[competition_code]
+
+    # L2 — file cache on disk (fast, survives request but not restart)
     model_store = caches["model_cache"]
     cache_key = model_cache_key(competition_code)
-
     if not force_refresh:
         try:
             cached_bundle = model_store.get(cache_key)
@@ -1361,15 +1370,18 @@ def get_or_train_model_bundle(competition_code, force_refresh=False):
                 and "feature_columns" in cached_bundle[2]
                 and "team_profiles" in cached_bundle[2]
             ):
+                _MODEL_REGISTRY[competition_code] = cached_bundle
                 return cached_bundle
         except Exception as e:
             print(f"[WARN] Could not read model bundle from file cache for {competition_code}: {e}")
 
+    # L3 — train from scratch
     training_df = fetch_training_data_all_seasons(competition_code)
     if training_df.empty:
         return None
 
     bundle = train_competition_models(training_df)
+    _MODEL_REGISTRY[competition_code] = bundle
     try:
         model_store.set(cache_key, bundle, timeout=MODEL_CACHE_TIMEOUT)
     except Exception as e:

@@ -64,6 +64,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",   # static files in production
+    "django.middleware.cache.UpdateCacheMiddleware",  # page cache (must be first after security)
     "django.contrib.sessions.middleware.SessionMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -71,7 +72,11 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "django.middleware.cache.FetchFromCacheMiddleware",  # page cache (must be last)
 ]
+
+CACHE_MIDDLEWARE_SECONDS = 300      # cache pages for 5 minutes
+CACHE_MIDDLEWARE_KEY_PREFIX = "ixtips"
 
 ROOT_URLCONF = "score_predictor.urls"
 
