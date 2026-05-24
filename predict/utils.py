@@ -1364,7 +1364,10 @@ def get_or_train_model_bundle(competition_code, force_refresh=False):
         return None
 
     bundle = train_competition_models(training_df)
-    cache.set(cache_key, bundle, timeout=MODEL_CACHE_TIMEOUT)
+    try:
+        cache.set(cache_key, bundle, timeout=MODEL_CACHE_TIMEOUT)
+    except Exception as e:
+        print(f"[WARN] Could not cache model bundle for {competition_code}: {e}")
     return bundle
 
 
