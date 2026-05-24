@@ -1349,15 +1349,18 @@ def get_team_recent_form(team_name, competition_code, limit=5):
 def get_or_train_model_bundle(competition_code, force_refresh=False):
     cache_key = model_cache_key(competition_code)
     if not force_refresh:
-        cached_bundle = cache.get(cache_key)
-        if (
-            isinstance(cached_bundle, tuple)
-            and len(cached_bundle) == 3
-            and isinstance(cached_bundle[2], dict)
-            and "feature_columns" in cached_bundle[2]
-            and "team_profiles" in cached_bundle[2]
-        ):
-            return cached_bundle
+        try:
+            cached_bundle = cache.get(cache_key)
+            if (
+                isinstance(cached_bundle, tuple)
+                and len(cached_bundle) == 3
+                and isinstance(cached_bundle[2], dict)
+                and "feature_columns" in cached_bundle[2]
+                and "team_profiles" in cached_bundle[2]
+            ):
+                return cached_bundle
+        except Exception as e:
+            print(f"[WARN] Could not read model bundle from cache for {competition_code}: {e}")
 
     training_df = fetch_training_data_all_seasons(competition_code)
     if training_df.empty:
