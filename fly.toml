@@ -9,7 +9,7 @@ console_command = '/code/manage.py shell'
   release_command = 'sh -c "python manage.py collectstatic --noinput && python manage.py migrate --noinput"'
 
 [processes]
-  app    = 'gunicorn --bind :8080 --workers 2 score_predictor.wsgi'
+  app    = 'gunicorn --bind :8080 --workers 2 --preload score_predictor.wsgi'
   celery = 'celery -A score_predictor worker --loglevel=INFO --concurrency=2'
   beat   = 'celery -A score_predictor beat --loglevel=INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler'
 
