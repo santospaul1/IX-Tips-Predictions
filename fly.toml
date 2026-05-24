@@ -26,7 +26,14 @@ console_command = '/code/manage.py shell'
   cpu_kind = 'shared'
   cpus = 1
   memory_mb = 1024
-  processes = ['app', 'celery', 'beat']
+  processes = ['app']
+
+[[vm]]
+  memory = '512mb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 512
+  processes = ['celery', 'beat']
 
 [[statics]]
   guest_path = '/code/staticfiles'
