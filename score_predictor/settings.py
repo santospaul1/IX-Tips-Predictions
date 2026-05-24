@@ -1,4 +1,5 @@
 import os
+import ssl
 import dj_database_url
 from pathlib import Path
 from datetime import timedelta
@@ -146,7 +147,7 @@ REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
 # Upstash and other managed Redis providers use rediss:// (TLS)
 _REDIS_USE_SSL = REDIS_URL.startswith("rediss://")
-_REDIS_SSL_OPTS = {"ssl_cert_reqs": None} if _REDIS_USE_SSL else {}
+_REDIS_SSL_OPTS = {"ssl_cert_reqs": ssl.CERT_NONE} if _REDIS_USE_SSL else {}
 
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
