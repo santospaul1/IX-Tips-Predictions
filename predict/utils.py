@@ -1335,10 +1335,17 @@ def train_competition_models(training_df, lookback=8):
 
 def get_team_recent_form(team_name, competition_code, limit=5):
     """Return list of recent result letters oldest→newest, e.g. ['W','D','L','W','W']."""
-    cached_bundle = cache.get(model_cache_key(competition_code))
-    if not cached_bundle or len(cached_bundle) < 3:
+    # Check L1 in-process registry first, then file cache — mirrors get_or_train_model_bundle
+    bundle = _MODEL_REGISTRY.get(competition_code)
+    if bundle is None:
+        from django.core.cache import caches
+        try:
+            bundle = caches["model_cache"].get(model_cache_key(competition_code))
+        except Exception:
+            bundle = None
+    if not bundle or len(bundle) < 3:
         return []
-    team_profiles = cached_bundle[2].get("team_profiles", {})
+    team_profiles = bundle[2].get("team_profiles", {})
     profile = team_profiles.get(team_name)
     if not profile:
         return []
