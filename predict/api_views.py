@@ -159,10 +159,19 @@ def api_top_picks_v1(request):
 
     picks = TopPick.objects.filter(match_date=date_str, variant=variant).order_by("-confidence")
 
+    match_scores = {}
+    for mp in MatchPrediction.objects.filter(match_date=date_str).values(
+        "home_team", "away_team", "actual_home_goals", "actual_away_goals"
+    ):
+        key = (mp["home_team"], mp["away_team"])
+        if mp["actual_home_goals"] is not None and mp["actual_away_goals"] is not None:
+            match_scores[key] = f"{mp['actual_home_goals']}-{mp['actual_away_goals']}"
+
     data = []
     for p in picks:
         meta_home = get_team_metadata(p.home_team)
         meta_away = get_team_metadata(p.away_team)
+        actual_score = match_scores.get((p.home_team, p.away_team))
         data.append({
             "match_date": str(p.match_date),
             "home_team": normalize_display_team_name(meta_home.get("shortName"), fallback=p.home_team),
@@ -174,6 +183,7 @@ def api_top_picks_v1(request):
             "odds": p.odds,
             "is_correct": p.is_correct,
             "actual_tip": p.actual_tip,
+            "actual_score": actual_score,
             "variant": p.variant,
             "variant_label": dict(TopPick.VARIANT_CHOICES).get(p.variant, p.variant),
         })

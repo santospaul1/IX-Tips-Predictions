@@ -147,9 +147,11 @@ def refresh_live_match_data():
     """
     from .views import refresh_prediction_statuses
 
+    from datetime import timedelta
     today = date.today()
+    yesterday = today - timedelta(days=1)
     refresh_pairs = (
-        MatchPrediction.objects.filter(match_date__gte=today)
+        MatchPrediction.objects.filter(match_date__gte=yesterday)
         .values("match_date", "competition")
         .distinct()
     )
