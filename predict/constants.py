@@ -15,9 +15,8 @@ COMPETITIONS = {
     "CL": "UEFA Champions League",
     "BSA": "Campeonato Brasileiro Serie A",
     "CLI": "Copa Libertadores",
-    # EC (Euro 2028) and WC (World Cup 2026) excluded — no active tournament
-    # and football-data.org requires a paid plan for both. Re-add when a
-    # tournament is approaching and the plan is upgraded.
+    "WC": "FIFA World Cup",
+    # EC (Euro 2028) excluded — no active tournament until 2028
 }
 
 COMPETITION_CHOICES = [(code, name) for code, name in COMPETITIONS.items()]
