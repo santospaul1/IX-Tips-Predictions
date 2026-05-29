@@ -13,10 +13,11 @@ COMPETITIONS = {
     "PPL": "Primeira Liga",
     "ELC": "Championship",
     "CL": "UEFA Champions League",
-    "EC": "European Championship",
     "BSA": "Campeonato Brasileiro Serie A",
     "CLI": "Copa Libertadores",
-    "WC": "FIFA World Cup",
+    # EC (Euro 2028) and WC (World Cup 2026) excluded — no active tournament
+    # and football-data.org requires a paid plan for both. Re-add when a
+    # tournament is approaching and the plan is upgraded.
 }
 
 COMPETITION_CHOICES = [(code, name) for code, name in COMPETITIONS.items()]
