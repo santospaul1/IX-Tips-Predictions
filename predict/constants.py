@@ -16,7 +16,7 @@ COMPETITIONS = {
     "BSA": "Campeonato Brasileiro Serie A",
     "CLI": "Copa Libertadores",
     "WC": "FIFA World Cup",
-    # EC (Euro 2028) excluded — no active tournament until 2028
+    "EC": "European Championship",
 }
 
 COMPETITION_CHOICES = [(code, name) for code, name in COMPETITIONS.items()]
