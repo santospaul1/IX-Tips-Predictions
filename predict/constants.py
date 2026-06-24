@@ -16,8 +16,11 @@ COMPETITIONS = {
     "CL": "UEFA Champions League",
     "BSA": "Campeonato Brasileiro Serie A",
     "CLI": "Copa Libertadores",
-    "WC": "FIFA World Cup",
-    "EC": "European Championship",
+    # WC/EC commented out: football-data.org's plan returns no data for them, so
+    # the daily jobs just waste API calls + log 429s. The prediction model also
+    # isn't suited to national-team tournaments. Re-add if the plan ever covers them.
+    # "WC": "FIFA World Cup",
+    # "EC": "European Championship",
     # ── API-Football (provider "AF") — shelved: free plan blocks current seasons.
     # Re-enable by uncommenting here + in COMPETITION_PROVIDERS/APIFOOTBALL_LEAGUE_IDS.
     # "MLS": "Major League Soccer",
