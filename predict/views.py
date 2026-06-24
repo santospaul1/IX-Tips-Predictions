@@ -29,7 +29,7 @@ from django_celery_beat.models import PeriodicTask
 
 from .models import ComboSlip, ComboSlipLeg, MatchOdds, MatchPrediction, TopPick
 from .forms import ActualResultForm, PredictionForm, LivePredictionForm
-from .constants import API_TOKEN, COMPETITIONS, ODDS_API_KEY as SETTINGS_ODDS_API_KEY
+from .constants import API_TOKEN, COMPETITIONS, ODDS_API_KEY as SETTINGS_ODDS_API_KEY, country_flag_url
 from .utils import (
     _market_odds_value,
     explain_pick_reasons,
@@ -1721,7 +1721,13 @@ def fuzzy_match_logo(team_name):
 
 
 def get_team_metadata(name):
-    return cache.get(f"team_meta::{name}", {"shortName": name, "crest": None})
+    meta = cache.get(f"team_meta::{name}", {"shortName": name, "crest": None})
+    # Fall back to the league's country flag when a team has no badge.
+    if not meta.get("crest") and meta.get("competition"):
+        flag = country_flag_url(meta["competition"])
+        if flag:
+            meta = {**meta, "crest": flag}
+    return meta
 
 
 def normalize_display_team_name(name, fallback=None, max_length=14):
@@ -2695,12 +2701,12 @@ def predictions_view(request):
 
     for row in league_table:
         team_name = row["team"]["name"]
-        meta = cache.get(f"team_meta::{team_name}", {})
+        meta = get_team_metadata(team_name)
         row["team"]["shortName"] = normalize_display_team_name(
             meta.get("shortName"),
             fallback=team_name,
         )
-        row["team"]["crest"] = meta.get("crest", static("logos/default.png"))
+        row["team"]["crest"] = meta.get("crest") or static("logos/default.png")
 
     paginator = Paginator(display_data, 10)
     page_number = request.GET.get("page")
@@ -2996,7 +3002,7 @@ def ajax_league_table(request):
     for row in table:
         team = row.get("team", {})
         name = team.get("name", "")
-        meta = cache.get(f"team_meta::{name}", {})
+        meta = get_team_metadata(name)
         team["shortName"] = meta.get("shortName") or team.get("shortName") or name
         team["crest"] = meta.get("crest") or team.get("crest") or static("logos/default.png")
     html = render_to_string("partials/league_table.html", {"league_table": table})
