@@ -1515,21 +1515,41 @@ def admin_task_dashboard(request):
     })
 
 
+# Maps the legacy Celery task paths (still shown on the dashboard) to the
+# synchronous run_task jobs that replaced them.
+TASK_PATH_TO_JOB = {
+    "predict.tasks.trigger_staggered_scheduling": "predictions",
+    "predict.tasks.schedule_predictions_staggered": "predictions",
+    "predict.tasks.cache_training_data": "training",
+    "predict.tasks.refresh_daily_odds_cache": "odds",
+    "predict.tasks.refresh_combo_slips": "combo",
+    "predict.tasks.refresh_all_league_tables": "tables",
+    "predict.tasks.update_metadata_task": "metadata",
+    "predict.tasks.refresh_live_match_data": "live",
+}
+
+
 @login_required
 @require_POST
 def trigger_task_now(request):
+    import threading
+    from django.core.management import call_command
+
     task_path = request.POST.get("task_path", "").strip()
-    allowed_tasks = set(
-        PeriodicTask.objects.exclude(task__isnull=True).exclude(task="").values_list("task", flat=True)
-    )
-    if task_path not in allowed_tasks:
+    job = TASK_PATH_TO_JOB.get(task_path)
+    if job is None:
         return JsonResponse({"success": False, "message": "Task is not allowed."}, status=400)
 
-    try:
-        current_app.send_task(task_path)
-        return JsonResponse({"success": True, "message": f"{task_path} triggered successfully."})
-    except Exception as e:
-        return JsonResponse({"success": False, "error": str(e)}, status=500)
+    # Run in a background thread so the request returns immediately —
+    # jobs like predictions can take several minutes.
+    def _run():
+        try:
+            call_command("run_task", job)
+        except Exception as exc:
+            print(f"[trigger_task_now] {job} failed: {exc}")
+
+    threading.Thread(target=_run, daemon=True).start()
+    return JsonResponse({"success": True, "message": f"{task_path} triggered (running in background)."})
 
 
 @login_required

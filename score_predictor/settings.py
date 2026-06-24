@@ -1,5 +1,4 @@
 import os
-import ssl
 import dj_database_url
 from pathlib import Path
 from datetime import timedelta
@@ -146,35 +145,22 @@ FOOTBALL_DATA_BASE_URL = os.environ.get(
     "FOOTBALL_DATA_BASE_URL", "https://api.football-data.org/v4"
 )
 
-# ── Redis / Celery ────────────────────────────────────────────────────────────
-
-REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-
-# Upstash and other managed Redis providers use rediss:// (TLS)
-_REDIS_USE_SSL = REDIS_URL.startswith("rediss://")
-_REDIS_SSL_OPTS = {"ssl_cert_reqs": ssl.CERT_NONE} if _REDIS_USE_SSL else {}
-
-CELERY_BROKER_URL = REDIS_URL
-CELERY_RESULT_BACKEND = REDIS_URL
-CELERY_ACCEPT_CONTENT = ["json"]
-CELERY_TASK_SERIALIZER = "json"
-CELERY_TIMEZONE = "Africa/Nairobi"
-CELERY_ENABLE_UTC = False
-if _REDIS_USE_SSL:
-    CELERY_BROKER_USE_SSL = _REDIS_SSL_OPTS
-    CELERY_REDIS_BACKEND_USE_SSL = _REDIS_SSL_OPTS
+# ── Cache ─────────────────────────────────────────────────────────────────────
+# Redis/Celery removed: the scheduled jobs now run via supercronic + the
+# `run_task` management command (see crontab), and caching is Postgres-backed.
+# This eliminates the Upstash dependency whose monthly command limit was being
+# exhausted by Celery's 24/7 broker polling.
 
 CACHES = {
-    # Redis — sessions, odds, small data
+    # Postgres-backed cache — odds, standings, metadata, small data.
+    # Table created via `manage.py createcachetable` in the release command.
     "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": REDIS_URL,
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            "CONNECTION_POOL_KWARGS": _REDIS_SSL_OPTS,
-        },
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "ix_tips_cache",
+        # High limit so page-cache keys don't evict training-data entries
+        "OPTIONS": {"MAX_ENTRIES": 10000, "CULL_FREQUENCY": 4},
     },
-    # File-based — large ML model bundles (sklearn models exceed Upstash 1MB limit)
+    # File-based — large ML model bundles (sklearn models are big)
     "model_cache": {
         "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
         "LOCATION": "/tmp/ix_tips_model_cache",

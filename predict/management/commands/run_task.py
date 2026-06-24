@@ -1,0 +1,72 @@
+"""
+Run scheduled IX-Tips jobs without Celery/Redis.
+
+Each job is invoked synchronously by supercronic (see /code/crontab).
+This replaces the old Celery worker + beat setup, which polled the Redis
+broker 24/7 and exhausted the Upstash monthly command limit.
+
+Usage:
+    python manage.py run_task <job> [--date YYYY-MM-DD]
+"""
+import time
+
+from django.core.management.base import BaseCommand
+
+from predict.constants import COMPETITIONS
+
+
+class Command(BaseCommand):
+    help = "Run a scheduled IX-Tips job (no Celery/Redis required)."
+
+    JOBS = (
+        "predictions",  # generate predictions for upcoming fixtures
+        "training",     # cache training data for all competitions
+        "odds",         # refresh odds + rebuild top picks
+        "combo",        # rebuild combo slips
+        "tables",       # refresh league standings
+        "metadata",     # refresh team metadata (crests, names)
+        "live",         # refresh live status, scores, top picks
+    )
+
+    def add_arguments(self, parser):
+        parser.add_argument("job", choices=self.JOBS)
+        parser.add_argument("--date", default=None, help="Optional match date (YYYY-MM-DD)")
+
+    def handle(self, *args, **opts):
+        job = opts["job"]
+        match_date = opts.get("date")
+        started = time.time()
+        self.stdout.write(f"[run_task] starting '{job}'")
+
+        # Imported lazily so a failing import in one task doesn't block others
+        from predict import tasks
+
+        if job == "predictions":
+            self._run_predictions(tasks, match_date)
+        elif job == "training":
+            tasks.cache_training_data()
+        elif job == "odds":
+            tasks.refresh_daily_odds_cache()
+        elif job == "combo":
+            tasks.refresh_combo_slips()
+        elif job == "tables":
+            tasks.refresh_all_league_tables()
+        elif job == "metadata":
+            tasks.update_metadata_task()
+        elif job == "live":
+            tasks.refresh_live_match_data()
+
+        elapsed = time.time() - started
+        self.stdout.write(f"[run_task] finished '{job}' in {elapsed:.1f}s")
+
+    def _run_predictions(self, tasks, match_date):
+        """
+        Sequential replacement for the old Celery staggered scheduler.
+        Runs one competition at a time to keep peak memory low.
+        """
+        for comp in COMPETITIONS:
+            self.stdout.write(f"[run_task] predicting {comp}")
+            try:
+                tasks.predict_next_fixtures_for_competition(comp, match_date)
+            except Exception as exc:  # one competition failing shouldn't stop the rest
+                self.stderr.write(f"[run_task] {comp} failed: {exc}")

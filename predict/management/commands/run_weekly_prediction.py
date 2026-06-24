@@ -1,9 +1,8 @@
+from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
 class Command(BaseCommand):
-    help = 'Run weekly predictions'
+    help = 'Run weekly predictions (synchronous; no Celery/Redis required)'
 
     def handle(self, *args, **kwargs):
-        from predict.tasks import trigger_staggered_scheduling
-
-        trigger_staggered_scheduling.delay()
+        call_command("run_task", "predictions")
