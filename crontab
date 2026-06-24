@@ -3,6 +3,7 @@
 #
 # min hour dom mon dow   command
   30   5    *   *   *     cd /code && python manage.py run_task training
+  45   5    *   *   *     cd /code && python manage.py run_task warmform
   0    6    *   *   *     cd /code && python manage.py run_task predictions
   20   6    *   *   *     cd /code && python manage.py run_task odds
   30   6    *   *   *     cd /code && python manage.py run_task combo

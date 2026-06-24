@@ -26,6 +26,7 @@ class Command(BaseCommand):
         "tables",       # refresh league standings
         "metadata",     # refresh team metadata (crests, names)
         "live",         # refresh live status, scores, top picks
+        "warmform",     # build model bundles -> populate shared team_profiles (recent form)
     )
 
     def add_arguments(self, parser):
@@ -55,9 +56,25 @@ class Command(BaseCommand):
             tasks.update_metadata_task()
         elif job == "live":
             tasks.refresh_live_match_data()
+        elif job == "warmform":
+            self._warm_form()
 
         elapsed = time.time() - started
         self.stdout.write(f"[run_task] finished '{job}' in {elapsed:.1f}s")
+
+    def _warm_form(self):
+        """
+        Build each competition's model bundle so its team_profiles land in the
+        shared cache, making recent form available on every machine.
+        """
+        from predict.utils import get_or_train_model_bundle
+
+        for comp in COMPETITIONS:
+            self.stdout.write(f"[run_task] warming form for {comp}")
+            try:
+                get_or_train_model_bundle(comp)
+            except Exception as exc:
+                self.stderr.write(f"[run_task] {comp} warmform failed: {exc}")
 
     def _run_predictions(self, tasks, match_date):
         """

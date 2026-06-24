@@ -1333,19 +1333,54 @@ def train_competition_models(training_df, lookback=8):
     return model_home, model_away, model_context
 
 
+def team_profiles_cache_key(competition_code):
+    return f"team_profiles::{competition_code}"
+
+
+def _store_team_profiles(competition_code, bundle):
+    """
+    Persist just the lightweight team_profiles dict to the shared (Postgres)
+    cache. The full model bundle stays in the machine-local file cache, but
+    recent form only needs team_profiles — and on Fly the web machine and the
+    cron machine don't share a filesystem, so this shared copy is what lets the
+    web machine serve recent form.
+    """
+    try:
+        if not bundle or len(bundle) < 3 or not isinstance(bundle[2], dict):
+            return
+        profiles = bundle[2].get("team_profiles")
+        if profiles:
+            # 2-day timeout so a single missed warmform run doesn't blank form;
+            # refreshed daily by the warmform job and whenever models are built.
+            cache.set(team_profiles_cache_key(competition_code), profiles, timeout=60 * 60 * 48)
+    except Exception as e:
+        print(f"[WARN] Could not store team_profiles for {competition_code}: {e}")
+
+
 def get_team_recent_form(team_name, competition_code, limit=5):
     """Return list of recent result letters oldest→newest, e.g. ['W','D','L','W','W']."""
-    # Check L1 in-process registry first, then file cache — mirrors get_or_train_model_bundle
-    bundle = _MODEL_REGISTRY.get(competition_code)
-    if bundle is None:
-        from django.core.cache import caches
-        try:
-            bundle = caches["model_cache"].get(model_cache_key(competition_code))
-        except Exception:
-            bundle = None
-    if not bundle or len(bundle) < 3:
+    team_profiles = None
+
+    # 1) Shared Postgres cache — works across machines (web vs cron on Fly)
+    try:
+        team_profiles = cache.get(team_profiles_cache_key(competition_code))
+    except Exception:
+        team_profiles = None
+
+    # 2) Fall back to the machine-local bundle (L1 registry, then file cache)
+    if not team_profiles:
+        bundle = _MODEL_REGISTRY.get(competition_code)
+        if bundle is None:
+            from django.core.cache import caches
+            try:
+                bundle = caches["model_cache"].get(model_cache_key(competition_code))
+            except Exception:
+                bundle = None
+        if bundle and len(bundle) >= 3 and isinstance(bundle[2], dict):
+            team_profiles = bundle[2].get("team_profiles", {})
+
+    if not team_profiles:
         return []
-    team_profiles = bundle[2].get("team_profiles", {})
     profile = team_profiles.get(team_name)
     if not profile:
         return []
@@ -1378,6 +1413,7 @@ def get_or_train_model_bundle(competition_code, force_refresh=False):
                 and "team_profiles" in cached_bundle[2]
             ):
                 _MODEL_REGISTRY[competition_code] = cached_bundle
+                _store_team_profiles(competition_code, cached_bundle)
                 return cached_bundle
         except Exception as e:
             print(f"[WARN] Could not read model bundle from file cache for {competition_code}: {e}")
@@ -1393,6 +1429,7 @@ def get_or_train_model_bundle(competition_code, force_refresh=False):
         model_store.set(cache_key, bundle, timeout=MODEL_CACHE_TIMEOUT)
     except Exception as e:
         print(f"[WARN] Could not store model bundle in file cache for {competition_code}: {e}")
+    _store_team_profiles(competition_code, bundle)
     return bundle
 
 
