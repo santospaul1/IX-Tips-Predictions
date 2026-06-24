@@ -294,6 +294,10 @@ def _lf_get(path):
     return data.get("response", {}) or {}
 
 
+def _fotmob_logo(team_id):
+    return f"https://images.fotmob.com/image_resources/logo/teamlogo/{team_id}.png" if team_id else None
+
+
 def _normalize_lf_match(m):
     home = m.get("home", {}) or {}
     away = m.get("away", {}) or {}
@@ -311,8 +315,8 @@ def _normalize_lf_match(m):
         "id": m.get("id"),
         "utcDate": st.get("utcTime"),  # ISO 8601 with Z
         "status": status,
-        "homeTeam": {"name": home.get("name"), "crest": None},
-        "awayTeam": {"name": away.get("name"), "crest": None},
+        "homeTeam": {"name": home.get("name"), "crest": _fotmob_logo(home.get("id"))},
+        "awayTeam": {"name": away.get("name"), "crest": _fotmob_logo(away.get("id"))},
         "score": {
             "fullTime": {
                 "home": home.get("score") if finished else None,
@@ -397,14 +401,14 @@ def lf_fetch_standings(competition_code):
 
 
 def lf_fetch_teams(competition_code):
-    """Derive team list (names only) from the cached dump — no extra API call."""
-    names = set()
+    """Derive teams (with FotMob crests) from the cached dump — no extra API call."""
+    crests = {}
     for m in _lf_season_matches(competition_code):
-        if m["homeTeam"]["name"]:
-            names.add(m["homeTeam"]["name"])
-        if m["awayTeam"]["name"]:
-            names.add(m["awayTeam"]["name"])
-    teams = [{"name": n, "shortName": n, "crest": None} for n in sorted(names)]
+        for side in ("homeTeam", "awayTeam"):
+            n = m[side]["name"]
+            if n and n not in crests:
+                crests[n] = m[side]["crest"]
+    teams = [{"name": n, "shortName": n, "crest": crests[n]} for n in sorted(crests)]
     return None, teams
 
 
