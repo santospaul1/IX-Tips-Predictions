@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from .constants import COMPETITIONS
+from .constants import COMPETITIONS, country_flag_url
 from .models import MatchPrediction, TopPick, ComboSlip
 from .views import (
     build_correct_score_rows,
@@ -74,8 +74,8 @@ def _prediction_to_dict(p):
         "match_time": get_cached_kickoff_time(p.competition, p.match_date, p.home_team, p.away_team),
         "home_team": normalize_display_team_name(meta_home.get("shortName"), fallback=p.home_team),
         "away_team": normalize_display_team_name(meta_away.get("shortName"), fallback=p.away_team),
-        "home_logo": meta_home.get("crest"),
-        "away_logo": meta_away.get("crest"),
+        "home_logo": meta_home.get("crest") or country_flag_url(p.competition),
+        "away_logo": meta_away.get("crest") or country_flag_url(p.competition),
         "home_form": get_team_recent_form(p.home_team, p.competition),
         "away_form": get_team_recent_form(p.away_team, p.competition),
         "predicted_home_goals": p.predicted_home_goals,
@@ -176,8 +176,8 @@ def api_top_picks_v1(request):
             "match_date": str(p.match_date),
             "home_team": normalize_display_team_name(meta_home.get("shortName"), fallback=p.home_team),
             "away_team": normalize_display_team_name(meta_away.get("shortName"), fallback=p.away_team),
-            "home_logo": meta_home.get("crest"),
-            "away_logo": meta_away.get("crest"),
+            "home_logo": meta_home.get("crest") or country_flag_url(p.competition),
+            "away_logo": meta_away.get("crest") or country_flag_url(p.competition),
             "tip": p.tip,
             "confidence": p.confidence,
             "odds": p.odds,
@@ -312,8 +312,8 @@ def api_combo_slips(request):
                 ),
                 "home_team": normalize_display_team_name(meta_home.get("shortName"), fallback=leg.home_team),
                 "away_team": normalize_display_team_name(meta_away.get("shortName"), fallback=leg.away_team),
-                "home_logo": meta_home.get("crest"),
-                "away_logo": meta_away.get("crest"),
+                "home_logo": meta_home.get("crest") or country_flag_url(leg.competition),
+                "away_logo": meta_away.get("crest") or country_flag_url(leg.competition),
                 "tip": leg.tip,
                 "confidence": leg.confidence,
                 "odds": leg.odds,
@@ -356,8 +356,8 @@ def api_won_slips(request):
             "match_date": str(p.match_date),
             "home_team": normalize_display_team_name(meta_home.get("shortName"), fallback=p.home_team),
             "away_team": normalize_display_team_name(meta_away.get("shortName"), fallback=p.away_team),
-            "home_logo": meta_home.get("crest"),
-            "away_logo": meta_away.get("crest"),
+            "home_logo": meta_home.get("crest") or country_flag_url(p.competition),
+            "away_logo": meta_away.get("crest") or country_flag_url(p.competition),
             "tip": p.tip,
             "actual_tip": p.actual_tip,
             "confidence": p.confidence,

@@ -92,6 +92,20 @@ COMPETITION_CHOICES = [(code, name) for code, name in COMPETITIONS.items()]
 competitions = COMPETITIONS
 NAME_TO_CODE = {name.lower(): code for code, name in COMPETITIONS.items()}
 
+# Flag code per competition (flagcdn.com), used as the logo fallback when a
+# team has no badge — better than showing nothing or just the name.
+COMPETITION_COUNTRY = {
+    "PL": "gb-eng", "ELC": "gb-eng", "PD": "es", "SA": "it", "BL1": "de",
+    "FL1": "fr", "DED": "nl", "PPL": "pt", "CL": "eu", "BSA": "br",
+    "BEL": "be", "TUR": "tr", "GRE": "gr", "SCO": "gb-sct", "GER2": "de",
+    "ITA2": "it", "ESP2": "es", "FRA2": "fr", "SAU": "sa",
+}
+
+
+def country_flag_url(competition_code):
+    code = COMPETITION_COUNTRY.get(competition_code)
+    return f"https://flagcdn.com/w160/{code}.png" if code else None
+
 API_TOKEN = getattr(settings, "FOOTBALL_DATA_API_KEY", os.getenv("FOOTBALL_DATA_API_KEY", ""))
 ODDS_API_KEY = getattr(settings, "ODDS_API_KEY", os.getenv("ODDS_API_KEY", ""))
 BASE_URL = getattr(settings, "FOOTBALL_DATA_BASE_URL", os.getenv("FOOTBALL_DATA_BASE_URL", "https://api.football-data.org/v4"))
@@ -123,4 +137,12 @@ def model_cache_key(comp_code):
 
 
 def get_team_metadata(name):
-    return cache.get(team_meta_cache_key(name), {"shortName": name, "crest": None})
+    meta = cache.get(team_meta_cache_key(name), {"shortName": name, "crest": None})
+    # Fall back to the league's country flag when a team has no badge, so the UI
+    # shows a flag rather than nothing/just the name (e.g. football-data.co.uk
+    # leagues have no crests).
+    if not meta.get("crest") and meta.get("competition"):
+        flag = country_flag_url(meta["competition"])
+        if flag:
+            meta = {**meta, "crest": flag}
+    return meta
