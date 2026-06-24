@@ -502,9 +502,11 @@ def fetch_matches_by_date(api_key, competition_code, match_date, retries=2, dela
     Returns API-style match objects for a given date and competition.
     match_date: "YYYY-MM-DD"
     """
-    from .providers import is_af, af_fetch_matches_by_date
+    from .providers import is_af, is_lf, af_fetch_matches_by_date, lf_fetch_matches_by_date
     if is_af(competition_code):
         return af_fetch_matches_by_date(competition_code, match_date)
+    if is_lf(competition_code):
+        return lf_fetch_matches_by_date(competition_code, match_date)
 
     url = f"{BASE_URL}/matches"
     headers = {"X-Auth-Token": api_key or API_TOKEN}
@@ -524,9 +526,11 @@ def fetch_matches_by_season(api_key, competition_code, season_year):
     """
     Wrapper to fetch matches for a season year.
     """
-    from .providers import is_af, af_fetch_matches_by_season
+    from .providers import is_af, is_lf, af_fetch_matches_by_season, lf_fetch_matches_by_season
     if is_af(competition_code):
         return af_fetch_matches_by_season(competition_code, season_year)
+    if is_lf(competition_code):
+        return lf_fetch_matches_by_season(competition_code, season_year)
 
     url = f"{BASE_URL}/competitions/{competition_code}/matches"
     headers = {"X-Auth-Token": api_key or API_TOKEN}
@@ -559,9 +563,11 @@ def fetch_competition_scorers(competition_code):
     if cached is not None:
         return cached
 
-    from .providers import is_af, af_fetch_scorers
+    from .providers import is_af, is_lf, af_fetch_scorers
     if is_af(competition_code):
         scorers = af_fetch_scorers(competition_code)
+    elif is_lf(competition_code):
+        scorers = []  # LF: scorers skipped to conserve the monthly quota
     else:
         url = f"{BASE_URL}/competitions/{competition_code}/scorers"
         json_data = _get_json(url, headers=HEADERS, retries=2)
@@ -2165,9 +2171,11 @@ def get_league_table(competition):
     if cached:
         return cached
 
-    from .providers import is_af, af_fetch_standings
+    from .providers import is_af, is_lf, af_fetch_standings, lf_fetch_standings
     if is_af(competition):
         table = af_fetch_standings(competition)
+    elif is_lf(competition):
+        table = lf_fetch_standings(competition)
     else:
         url = f"{BASE_URL}/competitions/{competition}/standings"
         json_data = _get_json(url, headers={"X-Auth-Token": API_TOKEN}, retries=2)
@@ -2188,10 +2196,10 @@ def fetch_and_cache_team_metadata():
       - competition_meta::<code>
       - team_meta::<team name>
     """
-    from .providers import is_af, af_fetch_teams
+    from .providers import is_af, is_lf, af_fetch_teams, lf_fetch_teams
     for comp_code, comp_name in COMPETITIONS.items():
-        if is_af(comp_code):
-            _, teams = af_fetch_teams(comp_code)
+        if is_af(comp_code) or is_lf(comp_code):
+            _, teams = (af_fetch_teams if is_af(comp_code) else lf_fetch_teams)(comp_code)
             if not teams:
                 continue
             comp_meta = {"name": comp_name, "crest": ""}

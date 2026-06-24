@@ -18,16 +18,16 @@ COMPETITIONS = {
     "CLI": "Copa Libertadores",
     "WC": "FIFA World Cup",
     "EC": "European Championship",
-    # ── API-Football (provider "AF") — extra leagues not on the FD plan ──
-    # SHELVED: the free API-Football plan only exposes seasons 2022–2024, so it
-    # can't fetch current-season fixtures for live predictions. League IDs below
-    # are verified correct — to re-enable after upgrading to a paid plan, just
-    # uncomment the matching lines in COMPETITIONS, COMPETITION_PROVIDERS,
-    # APIFOOTBALL_LEAGUE_IDS, APIFOOTBALL_CALENDAR_YEAR (and the sport keys in
-    # views.COMPETITION_SPORT_MAP).
+    # ── API-Football (provider "AF") — shelved: free plan blocks current seasons.
+    # Re-enable by uncommenting here + in COMPETITION_PROVIDERS/APIFOOTBALL_LEAGUE_IDS.
     # "MLS": "Major League Soccer",
     # "LMX": "Liga MX",
     # "SPL": "Saudi Pro League",
+    # ── Live-Football-Data on RapidAPI (provider "LF") — extra leagues ──
+    # Fetched as a once-daily full-season dump (fixtures + results in one call)
+    # to respect the 100 requests/month free quota. Add leagues with their
+    # FotMob IDs in LIVEFOOTBALL_LEAGUE_IDS below.
+    "SAU": "Saudi Pro League",
 }
 
 # Which provider serves each competition. Anything not listed defaults to "FD".
@@ -35,6 +35,7 @@ COMPETITION_PROVIDERS = {
     # "MLS": "AF",
     # "LMX": "AF",
     # "SPL": "AF",
+    "SAU": "LF",
 }
 
 # API-Football numeric league IDs (verified against the account on 2026-05-27).
@@ -47,6 +48,14 @@ APIFOOTBALL_LEAGUE_IDS = {
 # AF leagues that run on a single calendar year (season == year). Everything
 # else is treated as a split (Aug–May) season where season == start year.
 APIFOOTBALL_CALENDAR_YEAR = {"MLS", "LMX"}
+
+# Live-Football-Data (FotMob) league IDs for provider "LF". Verified:
+#   536 = Saudi Pro League, 47 = Premier League (example).
+# Find a league's ID from its FotMob URL: fotmob.com/leagues/<ID>/overview/...
+# (MLS/Liga MX IDs to be confirmed once their seasons resume after the WC.)
+LIVEFOOTBALL_LEAGUE_IDS = {
+    "SAU": 536,
+}
 
 COMPETITION_CHOICES = [(code, name) for code, name in COMPETITIONS.items()]
 competitions = COMPETITIONS

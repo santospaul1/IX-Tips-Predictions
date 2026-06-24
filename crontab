@@ -2,6 +2,7 @@
 # Times are interpreted in the TZ env var set on the machine (Africa/Nairobi).
 #
 # min hour dom mon dow   command
+  20   5    *   *   *     cd /code && python manage.py run_task lfrefresh
   30   5    *   *   *     cd /code && python manage.py run_task training
   45   5    *   *   *     cd /code && python manage.py run_task warmform
   0    6    *   *   *     cd /code && python manage.py run_task predictions

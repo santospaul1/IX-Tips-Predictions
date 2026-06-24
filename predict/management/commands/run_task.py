@@ -27,6 +27,7 @@ class Command(BaseCommand):
         "metadata",     # refresh team metadata (crests, names)
         "live",         # refresh live status, scores, top picks
         "warmform",     # build model bundles -> populate shared team_profiles (recent form)
+        "lfrefresh",    # refresh Live-Football-Data season dumps (once/day, quota-bound)
     )
 
     def add_arguments(self, parser):
@@ -58,6 +59,8 @@ class Command(BaseCommand):
             tasks.refresh_live_match_data()
         elif job == "warmform":
             self._warm_form()
+        elif job == "lfrefresh":
+            self._lf_refresh()
 
         elapsed = time.time() - started
         self.stdout.write(f"[run_task] finished '{job}' in {elapsed:.1f}s")
@@ -75,6 +78,21 @@ class Command(BaseCommand):
                 get_or_train_model_bundle(comp)
             except Exception as exc:
                 self.stderr.write(f"[run_task] {comp} warmform failed: {exc}")
+
+    def _lf_refresh(self):
+        """
+        Force the once-daily season-dump fetch for each Live-Football-Data league
+        so all other reads that day hit the cache (respects the 100/month quota).
+        """
+        from predict.constants import LIVEFOOTBALL_LEAGUE_IDS
+        from predict.providers import lf_refresh_season
+
+        for comp in LIVEFOOTBALL_LEAGUE_IDS:
+            try:
+                n = lf_refresh_season(comp)
+                self.stdout.write(f"[run_task] LF refreshed {comp}: {n} matches")
+            except Exception as exc:
+                self.stderr.write(f"[run_task] LF refresh {comp} failed: {exc}")
 
     def _run_predictions(self, tasks, match_date):
         """

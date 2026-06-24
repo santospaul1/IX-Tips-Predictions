@@ -16,17 +16,24 @@ import logging
 import os
 
 import requests
+from django.core.cache import cache
 
 from .constants import (
     APIFOOTBALL_CALENDAR_YEAR,
     APIFOOTBALL_LEAGUE_IDS,
     COMPETITION_PROVIDERS,
+    LIVEFOOTBALL_LEAGUE_IDS,
 )
 
 logger = logging.getLogger(__name__)
 
 AF_BASE_URL = os.environ.get("APIFOOTBALL_BASE_URL", "https://v3.football.api-sports.io")
 AF_KEY = os.environ.get("APIFOOTBALL_KEY", "")
+
+# Live-Football-Data (FotMob) on RapidAPI
+LF_HOST = os.environ.get("LIVEFOOTBALL_HOST", "free-api-live-football-data.p.rapidapi.com")
+LF_KEY = os.environ.get("LIVEFOOTBALL_KEY", "")
+LF_SEASON_CACHE_TIMEOUT = 60 * 60 * 25  # one daily refresh; reads hit cache
 
 # API-Football fixture status short codes -> football-data status strings
 _AF_FINISHED = {"FT", "AET", "PEN", "AWD", "WO"}
@@ -41,6 +48,10 @@ def get_provider(competition_code):
 
 def is_af(competition_code):
     return get_provider(competition_code) == "AF"
+
+
+def is_lf(competition_code):
+    return get_provider(competition_code) == "LF"
 
 
 # ── Low-level request ─────────────────────────────────────────────────────────
@@ -251,4 +262,142 @@ def af_fetch_teams(competition_code):
             "shortName": team.get("name"),
             "crest": team.get("logo"),
         })
+    return None, teams
+
+
+# ══ Live-Football-Data (FotMob via RapidAPI) — provider "LF" ══════════════════
+# A single /football-get-all-matches-by-league call returns the whole current
+# season (finished + upcoming) for a league. We cache that dump for ~a day and
+# derive fixtures-by-date, training data, and standings from it — so each league
+# costs ~1 request/day, fitting the 100/month free quota.
+
+def _lf_get(path):
+    """Call Live-Football-Data and return the `response` dict (or {})."""
+    if not LF_KEY:
+        logger.info("LIVEFOOTBALL_KEY not set; skipping call %s", path)
+        return {}
+    headers = {"x-rapidapi-host": LF_HOST, "x-rapidapi-key": LF_KEY}
+    try:
+        r = requests.get(f"https://{LF_HOST}/{path}", headers=headers, timeout=20)
+        r.raise_for_status()
+        data = r.json()
+    except Exception as exc:
+        logger.warning("Live-Football-Data request failed: %s error=%s", path, exc)
+        return {}
+    if data.get("status") not in (None, "success"):
+        logger.warning("Live-Football-Data non-success for %s: %s", path, data.get("status"))
+    return data.get("response", {}) or {}
+
+
+def _normalize_lf_match(m):
+    home = m.get("home", {}) or {}
+    away = m.get("away", {}) or {}
+    st = m.get("status", {}) or {}
+    finished = bool(st.get("finished"))
+    if finished:
+        status = "FINISHED"
+    elif st.get("cancelled"):
+        status = "CANCELLED"
+    elif st.get("started"):
+        status = "IN_PLAY"
+    else:
+        status = "TIMED"
+    return {
+        "id": m.get("id"),
+        "utcDate": st.get("utcTime"),  # ISO 8601 with Z
+        "status": status,
+        "homeTeam": {"name": home.get("name"), "crest": None},
+        "awayTeam": {"name": away.get("name"), "crest": None},
+        "score": {
+            "fullTime": {
+                "home": home.get("score") if finished else None,
+                "away": away.get("score") if finished else None,
+            },
+            "halfTime": {"home": None, "away": None},
+        },
+    }
+
+
+def _lf_season_matches(competition_code, force_refresh=False):
+    """Cached full-season match dump (normalised), the single source for LF."""
+    league_id = LIVEFOOTBALL_LEAGUE_IDS.get(competition_code)
+    if not league_id:
+        return []
+    ck = f"lf_season_matches::{competition_code}"
+    if not force_refresh:
+        cached = cache.get(ck)
+        if cached is not None:
+            return cached
+    response = _lf_get(f"football-get-all-matches-by-league?leagueid={league_id}")
+    raw = response.get("matches", []) if isinstance(response, dict) else []
+    matches = [_normalize_lf_match(m) for m in raw if m.get("home") and m.get("away")]
+    cache.set(ck, matches, timeout=LF_SEASON_CACHE_TIMEOUT)
+    return matches
+
+
+def lf_refresh_season(competition_code):
+    """Force the once-daily API call (used by the lfrefresh cron job)."""
+    return len(_lf_season_matches(competition_code, force_refresh=True))
+
+
+def lf_fetch_matches_by_date(competition_code, match_date):
+    """match_date 'YYYY-MM-DD' — filter the cached season dump by kickoff date."""
+    day = str(match_date)[:10]
+    return [m for m in _lf_season_matches(competition_code)
+            if (m.get("utcDate") or "")[:10] == day]
+
+
+def lf_fetch_matches_by_season(competition_code, season_year=None):
+    """Return the full season dump (training uses the FINISHED ones)."""
+    return _lf_season_matches(competition_code)
+
+
+def lf_fetch_standings(competition_code):
+    """Compute a standings table from finished matches in the cached dump."""
+    matches = _lf_season_matches(competition_code)
+    rows = {}
+
+    def _row(name):
+        return rows.setdefault(name, {
+            "team": {"name": name, "shortName": name, "crest": None, "tla": None},
+            "playedGames": 0, "won": 0, "draw": 0, "lost": 0,
+            "points": 0, "goalsFor": 0, "goalsAgainst": 0, "goalDifference": 0,
+        })
+
+    for m in matches:
+        if m["status"] != "FINISHED":
+            continue
+        h, a = m["homeTeam"]["name"], m["awayTeam"]["name"]
+        hg, ag = m["score"]["fullTime"]["home"], m["score"]["fullTime"]["away"]
+        if not h or not a or hg is None or ag is None:
+            continue
+        hr, ar = _row(h), _row(a)
+        hr["playedGames"] += 1; ar["playedGames"] += 1
+        hr["goalsFor"] += hg; hr["goalsAgainst"] += ag
+        ar["goalsFor"] += ag; ar["goalsAgainst"] += hg
+        if hg > ag:
+            hr["won"] += 1; hr["points"] += 3; ar["lost"] += 1
+        elif hg < ag:
+            ar["won"] += 1; ar["points"] += 3; hr["lost"] += 1
+        else:
+            hr["draw"] += 1; ar["draw"] += 1; hr["points"] += 1; ar["points"] += 1
+
+    table = list(rows.values())
+    for r in table:
+        r["goalDifference"] = r["goalsFor"] - r["goalsAgainst"]
+    table.sort(key=lambda r: (r["points"], r["goalDifference"], r["goalsFor"]), reverse=True)
+    for i, r in enumerate(table, 1):
+        r["position"] = i
+    return table
+
+
+def lf_fetch_teams(competition_code):
+    """Derive team list (names only) from the cached dump — no extra API call."""
+    names = set()
+    for m in _lf_season_matches(competition_code):
+        if m["homeTeam"]["name"]:
+            names.add(m["homeTeam"]["name"])
+        if m["awayTeam"]["name"]:
+            names.add(m["awayTeam"]["name"])
+    teams = [{"name": n, "shortName": n, "crest": None} for n in sorted(names)]
     return None, teams
