@@ -28,6 +28,18 @@ COMPETITIONS = {
     # to respect the 100 requests/month free quota. Add leagues with their
     # FotMob IDs in LIVEFOOTBALL_LEAGUE_IDS below.
     "SAU": "Saudi Pro League",
+    # ── football-data.co.uk (provider "UK") — free CSVs, no key/quota ──
+    # New European leagues not on the football-data.org plan. Fully self-served
+    # (training from season files + fixtures from fixtures.csv + odds), so team
+    # names stay consistent. Map our code -> FDUK code in FOOTBALL_DATA_UK_CODES.
+    "BEL": "Belgian Pro League",
+    "TUR": "Süper Lig",
+    "GRE": "Super League Greece",
+    "SCO": "Scottish Premiership",
+    "GER2": "2. Bundesliga",
+    "ITA2": "Serie B",
+    "ESP2": "LaLiga 2",
+    "FRA2": "Ligue 2",
 }
 
 # Which provider serves each competition. Anything not listed defaults to "FD".
@@ -36,6 +48,22 @@ COMPETITION_PROVIDERS = {
     # "LMX": "AF",
     # "SPL": "AF",
     "SAU": "LF",
+    "BEL": "UK", "TUR": "UK", "GRE": "UK", "SCO": "UK",
+    "GER2": "UK", "ITA2": "UK", "ESP2": "UK", "FRA2": "UK",
+}
+
+# football-data.co.uk mapping: our code -> (kind, fduk_code).
+#   "main"  -> per-season file  /mmz4281/<season>/<code>.csv
+#   "extra" -> single combined file /new/<code>.csv (e.g. USA, MEX, ARG, BRA)
+FOOTBALL_DATA_UK_CODES = {
+    "BEL":  ("main", "B1"),
+    "TUR":  ("main", "T1"),
+    "GRE":  ("main", "G1"),
+    "SCO":  ("main", "SC0"),
+    "GER2": ("main", "D2"),
+    "ITA2": ("main", "I2"),
+    "ESP2": ("main", "SP2"),
+    "FRA2": ("main", "F2"),
 }
 
 # API-Football numeric league IDs (verified against the account on 2026-05-27).

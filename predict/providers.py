@@ -22,6 +22,7 @@ from .constants import (
     APIFOOTBALL_CALENDAR_YEAR,
     APIFOOTBALL_LEAGUE_IDS,
     COMPETITION_PROVIDERS,
+    FOOTBALL_DATA_UK_CODES,
     LIVEFOOTBALL_LEAGUE_IDS,
 )
 
@@ -52,6 +53,10 @@ def is_af(competition_code):
 
 def is_lf(competition_code):
     return get_provider(competition_code) == "LF"
+
+
+def is_uk(competition_code):
+    return get_provider(competition_code) == "UK"
 
 
 # ── Low-level request ─────────────────────────────────────────────────────────
@@ -395,6 +400,207 @@ def lf_fetch_teams(competition_code):
     """Derive team list (names only) from the cached dump — no extra API call."""
     names = set()
     for m in _lf_season_matches(competition_code):
+        if m["homeTeam"]["name"]:
+            names.add(m["homeTeam"]["name"])
+        if m["awayTeam"]["name"]:
+            names.add(m["awayTeam"]["name"])
+    teams = [{"name": n, "shortName": n, "crest": None} for n in sorted(names)]
+    return None, teams
+
+
+# ══ football-data.co.uk — provider "UK" ═══════════════════════════════════════
+# Free CSV files, no key, no rate limit. Per-season files for main leagues
+# (/mmz4281/<season>/<code>.csv) carry results + odds; fixtures.csv lists
+# upcoming matches + odds. Training pulls several past seasons (cached long,
+# they never change); the current season + fixtures refresh daily.
+
+UK_BASE = "https://www.football-data.co.uk"
+UK_FIXTURES_CACHE_TIMEOUT = 60 * 60 * 6
+UK_CURRENT_CACHE_TIMEOUT = 60 * 60 * 12
+UK_PAST_CACHE_TIMEOUT = 60 * 60 * 24 * 30
+
+
+def _uk_season_code(season_year):
+    """2024 -> '2425' (the 2024/25 season file suffix)."""
+    return f"{str(season_year)[-2:]}{str(season_year + 1)[-2:]}"
+
+
+def _current_season_start_year():
+    from datetime import date
+    t = date.today()
+    return t.year if t.month >= 7 else t.year - 1
+
+
+def _uk_get_csv(url, timeout=25):
+    """Download a CSV into a list of row dicts (pandas handles quoting/BOM)."""
+    import io
+    import pandas as pd
+    try:
+        r = requests.get(url, timeout=timeout)
+        r.raise_for_status()
+        df = pd.read_csv(io.StringIO(r.text), encoding_errors="ignore", on_bad_lines="skip")
+        df = df.where(pd.notnull(df), None)
+        return df.to_dict("records")
+    except Exception as exc:
+        logger.warning("football-data.co.uk fetch failed: %s error=%s", url, exc)
+        return []
+
+
+def _uk_iso(date_str, time_str=None):
+    """'16/08/2024' (+ '20:00') -> '2024-08-16T20:00:00Z'."""
+    from datetime import datetime
+    if not date_str:
+        return None
+    for fmt in ("%d/%m/%Y", "%d/%m/%y"):
+        try:
+            d = datetime.strptime(str(date_str).strip(), fmt)
+            break
+        except ValueError:
+            d = None
+    if d is None:
+        return None
+    t = str(time_str).strip() if time_str else ""
+    hh, mm = "00", "00"
+    if ":" in t:
+        hh, mm = (t.split(":") + ["00"])[:2]
+    return f"{d.strftime('%Y-%m-%d')}T{hh.zfill(2)}:{mm.zfill(2)}:00Z"
+
+
+def _uk_row_to_match(row, fduk_code):
+    home = row.get("HomeTeam") or row.get("Home")
+    away = row.get("AwayTeam") or row.get("Away")
+    if not home or not away:
+        return None
+    hg = row.get("FTHG", row.get("HG"))
+    ag = row.get("FTAG", row.get("AG"))
+    hhg, hag = row.get("HTHG"), row.get("HTAG")
+    finished = hg is not None and ag is not None
+    try:
+        hg = int(hg) if finished else None
+        ag = int(ag) if finished else None
+    except (ValueError, TypeError):
+        finished = False
+        hg = ag = None
+    return {
+        "id": f"UK-{fduk_code}-{row.get('Date')}-{home}-{away}",
+        "utcDate": _uk_iso(row.get("Date"), row.get("Time")),
+        "status": "FINISHED" if finished else "TIMED",
+        "homeTeam": {"name": str(home).strip(), "crest": None},
+        "awayTeam": {"name": str(away).strip(), "crest": None},
+        "score": {
+            "fullTime": {"home": hg, "away": ag},
+            "halfTime": {
+                "home": int(hhg) if str(hhg).isdigit() else None,
+                "away": int(hag) if str(hag).isdigit() else None,
+            },
+        },
+    }
+
+
+def _uk_main_season(fduk_code, season_year):
+    """Results for one season of a main league (cached; past seasons long)."""
+    ck = f"uk_main::{fduk_code}::{season_year}"
+    cached = cache.get(ck)
+    if cached is not None:
+        return cached
+    url = f"{UK_BASE}/mmz4281/{_uk_season_code(season_year)}/{fduk_code}.csv"
+    rows = _uk_get_csv(url)
+    matches = [m for m in (_uk_row_to_match(r, fduk_code) for r in rows) if m]
+    timeout = (UK_CURRENT_CACHE_TIMEOUT if season_year >= _current_season_start_year()
+               else UK_PAST_CACHE_TIMEOUT)
+    cache.set(ck, matches, timeout=timeout)
+    return matches
+
+
+def _uk_fixtures(fduk_code):
+    """Upcoming fixtures for a league from the shared fixtures.csv (cached)."""
+    ck = "uk_fixtures_all"
+    allrows = cache.get(ck)
+    if allrows is None:
+        allrows = _uk_get_csv(f"{UK_BASE}/fixtures.csv")
+        cache.set(ck, allrows, timeout=UK_FIXTURES_CACHE_TIMEOUT)
+    out = []
+    for r in allrows:
+        if (r.get("Div") or "").strip() == fduk_code:
+            m = _uk_row_to_match(r, fduk_code)
+            if m:
+                m["status"] = "TIMED"  # fixtures file = upcoming, no scores
+                out.append(m)
+    return out
+
+
+def _uk_current_matches(competition_code):
+    """Current-season results + upcoming fixtures, normalised and cached."""
+    mapping = FOOTBALL_DATA_UK_CODES.get(competition_code)
+    if not mapping:
+        return []
+    _, fduk_code = mapping
+    ck = f"uk_current::{competition_code}"
+    cached = cache.get(ck)
+    if cached is not None:
+        return cached
+    matches = _uk_main_season(fduk_code, _current_season_start_year()) + _uk_fixtures(fduk_code)
+    cache.set(ck, matches, timeout=UK_CURRENT_CACHE_TIMEOUT)
+    return matches
+
+
+def uk_fetch_matches_by_date(competition_code, match_date):
+    day = str(match_date)[:10]
+    return [m for m in _uk_current_matches(competition_code)
+            if (m.get("utcDate") or "")[:10] == day]
+
+
+def uk_fetch_matches_by_season(competition_code, season_year):
+    """Past/current season results for training."""
+    mapping = FOOTBALL_DATA_UK_CODES.get(competition_code)
+    if not mapping:
+        return []
+    _, fduk_code = mapping
+    if season_year is None:
+        season_year = _current_season_start_year()
+    return [m for m in _uk_main_season(fduk_code, season_year) if m["status"] == "FINISHED"]
+
+
+def uk_fetch_standings(competition_code):
+    """Compute a standings table from current-season finished matches."""
+    matches = [m for m in _uk_current_matches(competition_code) if m["status"] == "FINISHED"]
+    rows = {}
+
+    def _row(name):
+        return rows.setdefault(name, {
+            "team": {"name": name, "shortName": name, "crest": None, "tla": None},
+            "playedGames": 0, "won": 0, "draw": 0, "lost": 0,
+            "points": 0, "goalsFor": 0, "goalsAgainst": 0, "goalDifference": 0,
+        })
+
+    for m in matches:
+        h, a = m["homeTeam"]["name"], m["awayTeam"]["name"]
+        hg, ag = m["score"]["fullTime"]["home"], m["score"]["fullTime"]["away"]
+        if hg is None or ag is None:
+            continue
+        hr, ar = _row(h), _row(a)
+        hr["playedGames"] += 1; ar["playedGames"] += 1
+        hr["goalsFor"] += hg; hr["goalsAgainst"] += ag
+        ar["goalsFor"] += ag; ar["goalsAgainst"] += hg
+        if hg > ag:
+            hr["won"] += 1; hr["points"] += 3; ar["lost"] += 1
+        elif hg < ag:
+            ar["won"] += 1; ar["points"] += 3; hr["lost"] += 1
+        else:
+            hr["draw"] += 1; ar["draw"] += 1; hr["points"] += 1; ar["points"] += 1
+
+    table = list(rows.values())
+    for r in table:
+        r["goalDifference"] = r["goalsFor"] - r["goalsAgainst"]
+    table.sort(key=lambda r: (r["points"], r["goalDifference"], r["goalsFor"]), reverse=True)
+    for i, r in enumerate(table, 1):
+        r["position"] = i
+    return table
+
+
+def uk_fetch_teams(competition_code):
+    names = set()
+    for m in _uk_current_matches(competition_code):
         if m["homeTeam"]["name"]:
             names.add(m["homeTeam"]["name"])
         if m["awayTeam"]["name"]:

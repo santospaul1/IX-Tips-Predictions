@@ -220,11 +220,14 @@ def normalize_team_lookup_key(name):
 
 
 def fetch_matches_for_status_refresh(competition_code, match_date):
-    from .providers import is_af, is_lf, af_fetch_matches_by_date, lf_fetch_matches_by_date
+    from .providers import (is_af, is_lf, is_uk, af_fetch_matches_by_date,
+                            lf_fetch_matches_by_date, uk_fetch_matches_by_date)
     if is_af(competition_code):
         return af_fetch_matches_by_date(competition_code, match_date)
     if is_lf(competition_code):
         return lf_fetch_matches_by_date(competition_code, match_date)
+    if is_uk(competition_code):
+        return uk_fetch_matches_by_date(competition_code, match_date)
 
     url = f"{BASE_URL}/competitions/{competition_code}/matches"
     headers = {"X-Auth-Token": API_KEY}
