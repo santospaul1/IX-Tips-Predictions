@@ -83,9 +83,9 @@ COMPETITION_SPORT_MAP = {
     "BSA": "soccer_brazil_serie_a",
     "CLI": "soccer_copa_libertadores",  # approximate
     "WC": "soccer_fifa_world_cup",
-    # API-Football leagues — odds via the-odds-api (skipped if key is unknown)
-    "MLS": "soccer_usa_mls",
-    "LMX": "soccer_mexico_ligamx",
+    # API-Football leagues (shelved — re-enable with the AF leagues in constants)
+    # "MLS": "soccer_usa_mls",
+    # "LMX": "soccer_mexico_ligamx",
     # add more mappings as needed
 }
 

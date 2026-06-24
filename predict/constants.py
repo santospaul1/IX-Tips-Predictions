@@ -19,27 +19,29 @@ COMPETITIONS = {
     "WC": "FIFA World Cup",
     "EC": "European Championship",
     # ── API-Football (provider "AF") — extra leagues not on the FD plan ──
-    # Inactive until APIFOOTBALL_KEY is set. Verify the league IDs below for
-    # your account with: python manage.py discover_af_leagues <country>
-    "MLS": "Major League Soccer",
-    "LMX": "Liga MX",
-    "SPL": "Saudi Pro League",
+    # SHELVED: the free API-Football plan only exposes seasons 2022–2024, so it
+    # can't fetch current-season fixtures for live predictions. League IDs below
+    # are verified correct — to re-enable after upgrading to a paid plan, just
+    # uncomment the matching lines in COMPETITIONS, COMPETITION_PROVIDERS,
+    # APIFOOTBALL_LEAGUE_IDS, APIFOOTBALL_CALENDAR_YEAR (and the sport keys in
+    # views.COMPETITION_SPORT_MAP).
+    # "MLS": "Major League Soccer",
+    # "LMX": "Liga MX",
+    # "SPL": "Saudi Pro League",
 }
 
 # Which provider serves each competition. Anything not listed defaults to "FD".
 COMPETITION_PROVIDERS = {
-    "MLS": "AF",
-    "LMX": "AF",
-    "SPL": "AF",
+    # "MLS": "AF",
+    # "LMX": "AF",
+    # "SPL": "AF",
 }
 
-# API-Football numeric league IDs for the AF competitions above.
-# These are the commonly-published IDs — confirm against your account with
-# the discover_af_leagues command before relying on them.
+# API-Football numeric league IDs (verified against the account on 2026-05-27).
 APIFOOTBALL_LEAGUE_IDS = {
-    "MLS": 253,
-    "LMX": 262,
-    "SPL": 307,
+    # "MLS": 253,
+    # "LMX": 262,
+    # "SPL": 307,
 }
 
 # AF leagues that run on a single calendar year (season == year). Everything
