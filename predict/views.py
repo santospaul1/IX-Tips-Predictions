@@ -2706,7 +2706,9 @@ def predictions_view(request):
             meta.get("shortName"),
             fallback=team_name,
         )
-        row["team"]["crest"] = meta.get("crest") or static("logos/default.png")
+        row["team"]["crest"] = (
+            meta.get("crest") or country_flag_url(selected_code) or static("logos/default.png")
+        )
 
     paginator = Paginator(display_data, 10)
     page_number = request.GET.get("page")
