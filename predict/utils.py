@@ -502,6 +502,10 @@ def fetch_matches_by_date(api_key, competition_code, match_date, retries=2, dela
     Returns API-style match objects for a given date and competition.
     match_date: "YYYY-MM-DD"
     """
+    from .providers import is_af, af_fetch_matches_by_date
+    if is_af(competition_code):
+        return af_fetch_matches_by_date(competition_code, match_date)
+
     url = f"{BASE_URL}/matches"
     headers = {"X-Auth-Token": api_key or API_TOKEN}
     match_date_obj = datetime.strptime(match_date, "%Y-%m-%d")
@@ -520,6 +524,10 @@ def fetch_matches_by_season(api_key, competition_code, season_year):
     """
     Wrapper to fetch matches for a season year.
     """
+    from .providers import is_af, af_fetch_matches_by_season
+    if is_af(competition_code):
+        return af_fetch_matches_by_season(competition_code, season_year)
+
     url = f"{BASE_URL}/competitions/{competition_code}/matches"
     headers = {"X-Auth-Token": api_key or API_TOKEN}
     params = {"season": season_year}
@@ -551,9 +559,13 @@ def fetch_competition_scorers(competition_code):
     if cached is not None:
         return cached
 
-    url = f"{BASE_URL}/competitions/{competition_code}/scorers"
-    json_data = _get_json(url, headers=HEADERS, retries=2)
-    scorers = json_data.get("scorers", []) if json_data else []
+    from .providers import is_af, af_fetch_scorers
+    if is_af(competition_code):
+        scorers = af_fetch_scorers(competition_code)
+    else:
+        url = f"{BASE_URL}/competitions/{competition_code}/scorers"
+        json_data = _get_json(url, headers=HEADERS, retries=2)
+        scorers = json_data.get("scorers", []) if json_data else []
     cache.set(cache_key, scorers, timeout=60 * 60 * 12)
     return scorers
 
@@ -2153,15 +2165,19 @@ def get_league_table(competition):
     if cached:
         return cached
 
-    url = f"{BASE_URL}/competitions/{competition}/standings"
-    json_data = _get_json(url, headers={"X-Auth-Token": API_TOKEN}, retries=2)
-    if not json_data:
-        return []
-    # defensive: some competitions may not have standings structure
-    try:
-        table = json_data.get("standings", [])[0].get("table", [])
-    except Exception:
-        table = []
+    from .providers import is_af, af_fetch_standings
+    if is_af(competition):
+        table = af_fetch_standings(competition)
+    else:
+        url = f"{BASE_URL}/competitions/{competition}/standings"
+        json_data = _get_json(url, headers={"X-Auth-Token": API_TOKEN}, retries=2)
+        if not json_data:
+            return []
+        # defensive: some competitions may not have standings structure
+        try:
+            table = json_data.get("standings", [])[0].get("table", [])
+        except Exception:
+            table = []
     cache.set(cache_key, table, timeout=60 * 60 * 6)
     return table
 
@@ -2172,16 +2188,23 @@ def fetch_and_cache_team_metadata():
       - competition_meta::<code>
       - team_meta::<team name>
     """
+    from .providers import is_af, af_fetch_teams
     for comp_code, comp_name in COMPETITIONS.items():
-        url = f"{BASE_URL}/competitions/{comp_code}/teams"
-        json_data = _get_json(url, headers={"X-Auth-Token": API_TOKEN}, retries=2)
-        if not json_data:
-            continue
-        teams = json_data.get("teams", [])
-        comp_meta = {
-            "name": json_data.get("competition", {}).get("name", comp_name),
-            "crest": json_data.get("competition", {}).get("emblem", "")
-        }
+        if is_af(comp_code):
+            _, teams = af_fetch_teams(comp_code)
+            if not teams:
+                continue
+            comp_meta = {"name": comp_name, "crest": ""}
+        else:
+            url = f"{BASE_URL}/competitions/{comp_code}/teams"
+            json_data = _get_json(url, headers={"X-Auth-Token": API_TOKEN}, retries=2)
+            if not json_data:
+                continue
+            teams = json_data.get("teams", [])
+            comp_meta = {
+                "name": json_data.get("competition", {}).get("name", comp_name),
+                "crest": json_data.get("competition", {}).get("emblem", "")
+            }
         cache.set(f"competition_meta::{comp_code}", comp_meta, timeout=60 * 60 * 24 * 30)
         for team in teams:
             team_name = team.get("name")

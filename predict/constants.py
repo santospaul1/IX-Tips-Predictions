@@ -4,6 +4,7 @@ from django.core.cache import cache
 from django.conf import settings
 
 COMPETITIONS = {
+    # ── football-data.org (provider "FD") ──
     "PL": "Premier League",
     "PD": "La Liga",
     "SA": "Serie A",
@@ -17,7 +18,33 @@ COMPETITIONS = {
     "CLI": "Copa Libertadores",
     "WC": "FIFA World Cup",
     "EC": "European Championship",
+    # ── API-Football (provider "AF") — extra leagues not on the FD plan ──
+    # Inactive until APIFOOTBALL_KEY is set. Verify the league IDs below for
+    # your account with: python manage.py discover_af_leagues <country>
+    "MLS": "Major League Soccer",
+    "LMX": "Liga MX",
+    "SPL": "Saudi Pro League",
 }
+
+# Which provider serves each competition. Anything not listed defaults to "FD".
+COMPETITION_PROVIDERS = {
+    "MLS": "AF",
+    "LMX": "AF",
+    "SPL": "AF",
+}
+
+# API-Football numeric league IDs for the AF competitions above.
+# These are the commonly-published IDs — confirm against your account with
+# the discover_af_leagues command before relying on them.
+APIFOOTBALL_LEAGUE_IDS = {
+    "MLS": 253,
+    "LMX": 262,
+    "SPL": 307,
+}
+
+# AF leagues that run on a single calendar year (season == year). Everything
+# else is treated as a split (Aug–May) season where season == start year.
+APIFOOTBALL_CALENDAR_YEAR = {"MLS", "LMX"}
 
 COMPETITION_CHOICES = [(code, name) for code, name in COMPETITIONS.items()]
 competitions = COMPETITIONS
