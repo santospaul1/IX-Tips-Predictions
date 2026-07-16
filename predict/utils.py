@@ -450,9 +450,9 @@ def get_current_season_start_year(reference_date=None):
     return reference_date.year if reference_date.month >= 7 else reference_date.year - 1
 
 
-def get_default_training_seasons(reference_date=None, history_window=3):
+def get_default_training_seasons(reference_date=None, history_window=10):
     current_season = get_current_season_start_year(reference_date)
-    first_season = max(2023, current_season - history_window + 1)
+    first_season = max(2007, current_season - history_window + 1)
     return list(range(first_season, current_season + 1))
 
 
