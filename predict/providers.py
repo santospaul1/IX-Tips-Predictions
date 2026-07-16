@@ -543,7 +543,19 @@ def _uk_current_matches(competition_code):
     cached = cache.get(ck)
     if cached is not None:
         return cached
-    matches = _uk_main_season(fduk_code, _current_season_start_year()) + _uk_fixtures(fduk_code)
+
+    season = _current_season_start_year()
+    season_matches = _uk_main_season(fduk_code, season)
+
+    # If the computed season file doesn't exist yet (e.g. July, before the
+    # 2026/27 CSVs are published), fall back to the previous season whose CSV
+    # has real data. <10 matches almost certainly means an empty/404 file.
+    if len(season_matches) < 10:
+        logger.info("UK season %d empty for %s (%d matches) — falling back to %d",
+                     season, fduk_code, len(season_matches), season - 1)
+        season_matches = _uk_main_season(fduk_code, season - 1)
+
+    matches = season_matches + _uk_fixtures(fduk_code)
     cache.set(ck, matches, timeout=UK_CURRENT_CACHE_TIMEOUT)
     return matches
 
