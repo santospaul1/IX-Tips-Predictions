@@ -6,7 +6,7 @@ class MatchPrediction(models.Model):
     match_id = models.CharField(max_length=50, unique=True, null=True, blank=True)
     home_team = models.CharField(max_length=100)
     away_team = models.CharField(max_length=100)
-    match_date = models.DateField()
+    match_date = models.DateField(db_index=True)
     competition = models.CharField(max_length=20)
 
     predicted_home_goals = models.IntegerField(null=True, blank=True)
@@ -54,7 +54,7 @@ class TopPick(models.Model):
         ("4", "Mshipi"),
     )
 
-    match_date = models.DateField()
+    match_date = models.DateField(db_index=True)
     home_team = models.CharField(max_length=100)
     away_team = models.CharField(max_length=100)
     variant = models.CharField(max_length=1, choices=VARIANT_CHOICES, default="1")
@@ -128,7 +128,7 @@ class ComboSlip(models.Model):
 
 class ComboSlipLeg(models.Model):
     slip = models.ForeignKey(ComboSlip, on_delete=models.CASCADE, related_name="legs")
-    match_date = models.DateField()
+    match_date = models.DateField(db_index=True)
     competition = models.CharField(max_length=20)
     home_team = models.CharField(max_length=100)
     away_team = models.CharField(max_length=100)

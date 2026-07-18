@@ -1,7 +1,10 @@
+import logging
 from datetime import date
 
 from celery import shared_task
 from django.core.cache import cache
+
+logger = logging.getLogger(__name__)
 
 from .constants import API_TOKEN, COMPETITIONS, TRAINING_CACHE_TIMEOUT
 from .models import MatchPrediction, TopPick
@@ -22,7 +25,7 @@ from .utils import (
 def schedule_predictions_staggered(match_date=None):
     delay = 0
     for comp in COMPETITIONS:
-        print(f"[INFO] Scheduling prediction for {comp} in {delay} seconds")
+        logger.info(f" Scheduling prediction for {comp} in {delay} seconds")
         predict_next_fixtures_for_competition.apply_async(
             args=[comp, match_date],
             countdown=delay
@@ -37,7 +40,7 @@ def trigger_staggered_scheduling():
 def predict_next_fixtures_for_competition(competition_code, match_date=None):
     from .views import refresh_competition_odds
 
-    print(f"[INFO] Running prediction for {competition_code} on {match_date if match_date else 'auto'}")
+    logger.info(f" Running prediction for {competition_code} on {match_date if match_date else 'auto'}")
 
     if not match_date:
         match_dates_to_use = find_upcoming_match_dates(
@@ -57,21 +60,21 @@ def predict_next_fixtures_for_competition(competition_code, match_date=None):
         cache.set(f"training_data_{competition_code}", df, timeout=TRAINING_CACHE_TIMEOUT)
 
     if df.empty:
-        print(f"[WARN] No training data for {competition_code}")
+        logger.warning(f" No training data for {competition_code}")
         return
 
     model_bundle = get_or_train_model_bundle(competition_code)
     if model_bundle is None:
-        print(f"[WARN] No model bundle available for {competition_code}")
+        logger.warning(f" No model bundle available for {competition_code}")
         return
     model_home, model_away, model_context = model_bundle
 
     total_saved = 0
     for match_date_to_use in match_dates_to_use:
-        print(f"[INFO] Processing competition: {competition_code} for {match_date_to_use}")
+        logger.info(f" Processing competition: {competition_code} for {match_date_to_use}")
         matches = fetch_matches_by_date(API_TOKEN, competition_code, match_date_to_use)
         if not matches:
-            print(f"[WARN] No matches found for {competition_code} on {match_date_to_use}")
+            logger.warning(f" No matches found for {competition_code} on {match_date_to_use}")
             continue
 
         predictions = save_predictions(
@@ -86,13 +89,13 @@ def predict_next_fixtures_for_competition(competition_code, match_date=None):
             match_dates=[date.fromisoformat(match_date_to_use)],
         )
 
-    print(f"[INFO] Saved {total_saved} predictions for {competition_code} across {len(match_dates_to_use)} date(s)")
+    logger.info(f" Saved {total_saved} predictions for {competition_code} across {len(match_dates_to_use)} date(s)")
 
 @shared_task
 def cache_training_data():
-    print("[CACHE] Starting training data caching")
+    logger.info("Starting training data caching")
     if not API_TOKEN:
-        print("[CACHE] FOOTBALL_DATA_API_KEY is missing. Skipping training-data caching.")
+        logger.warning("FOOTBALL_DATA_API_KEY is missing. Skipping training-data caching.")
         return
     for comp in COMPETITIONS:
         key = f"training_data_{comp}"
@@ -100,15 +103,15 @@ def cache_training_data():
 
         if df is not None and not df.empty:
             cache.set(key, df, timeout=TRAINING_CACHE_TIMEOUT)
-            print(f"[CACHE] Cached {len(df)} records for {comp}")
+            logger.info(f" Cached {len(df)} records for {comp}")
         else:
-            print(f"[CACHE] No data fetched for {comp}. Check prior API error logs for auth/network failures.")
+            logger.info(f" No data fetched for {comp}. Check prior API error logs for auth/network failures.")
 
 
 @shared_task
 def refresh_all_league_tables():
     for code in COMPETITIONS:
-        print(f"[AUTO] Refreshing league table for {code}")
+        logger.info(f" Refreshing league table for {code}")
         get_league_table(code)
 
 @shared_task

@@ -1312,7 +1312,7 @@ def train_models(X, y_home, y_away, sample_weight=None):
     except Exception:
         home_rmse = away_rmse = None
 
-    print(f"[ML] Trained models; home_rmse={home_rmse}, away_rmse={away_rmse}")
+    logger.info(f" Trained models; home_rmse={home_rmse}, away_rmse={away_rmse}")
 
     return model_home, model_away, label_encoder
 
@@ -1345,7 +1345,7 @@ def _store_team_profiles(competition_code, bundle):
             # refreshed daily by the warmform job and whenever models are built.
             cache.set(team_profiles_cache_key(competition_code), profiles, timeout=60 * 60 * 48)
     except Exception as e:
-        print(f"[WARN] Could not store team_profiles for {competition_code}: {e}")
+        logger.warning(f" Could not store team_profiles for {competition_code}: {e}")
 
 
 def get_team_recent_form(team_name, competition_code, limit=5):
@@ -1407,7 +1407,7 @@ def get_or_train_model_bundle(competition_code, force_refresh=False):
                 _store_team_profiles(competition_code, cached_bundle)
                 return cached_bundle
         except Exception as e:
-            print(f"[WARN] Could not read model bundle from file cache for {competition_code}: {e}")
+            logger.warning(f" Could not read model bundle from file cache for {competition_code}: {e}")
 
     # L3 — train from scratch
     training_df = fetch_training_data_all_seasons(competition_code)
@@ -1419,7 +1419,7 @@ def get_or_train_model_bundle(competition_code, force_refresh=False):
     try:
         model_store.set(cache_key, bundle, timeout=MODEL_CACHE_TIMEOUT)
     except Exception as e:
-        print(f"[WARN] Could not store model bundle in file cache for {competition_code}: {e}")
+        logger.warning(f" Could not store model bundle in file cache for {competition_code}: {e}")
     _store_team_profiles(competition_code, bundle)
     return bundle
 
@@ -1554,7 +1554,7 @@ def save_predictions(matches, model_home=None, model_away=None, le=None, match_d
                         input_df["home_team"] = le.transform(input_df["home_team"])
                         input_df["away_team"] = le.transform(input_df["away_team"])
                     except Exception:
-                        print(f"[WARN] Unknown team(s) {home} / {away} for encoder; skipping")
+                        logger.warning(f" Unknown team(s) {home} / {away} for encoder; skipping")
                         continue
 
                     try:
@@ -1655,7 +1655,7 @@ def save_predictions(matches, model_home=None, model_away=None, le=None, match_d
                 })
 
         except Exception as e:
-            print(f"[ERROR] save_predictions failed for match {match}: {e}")
+            logger.error(f" save_predictions failed for match {match}: {e}")
             continue
 
     return saved

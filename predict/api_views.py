@@ -58,11 +58,7 @@ def _prediction_to_dict(p, team_meta_cache=None, form_cache=None, kickoff_cache=
         else:
             actual_winner = "D"
 
-    try:
-        odds_obj = p.odds
-    except Exception:
-        odds_obj = None
-
+    odds_obj = getattr(p, "odds", None)
     display_odds = None
     if winner and odds_obj:
         odds_map = {"H": odds_obj.home_win, "D": odds_obj.draw, "A": odds_obj.away_win}

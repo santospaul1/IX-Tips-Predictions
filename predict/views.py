@@ -592,10 +592,10 @@ def live_predictions_by_date(request):
                         predictions.append(prediction)
 
                     except Exception as e:
-                        print(f"[ERROR] Prediction failed for {home} vs {away}: {e}")
+                        logger.error(f" Prediction failed for {home} vs {away}: {e}")
     else:
         form = LivePredictionForm()
-    print(predictions)
+    # Debug output removed — use logger.debug() if needed
 
     return render(request, "predict/live_predictions.html", {
         "form": form,
@@ -1540,7 +1540,7 @@ def trigger_task_now(request):
         try:
             call_command("run_task", job)
         except Exception as exc:
-            print(f"[trigger_task_now] {job} failed: {exc}")
+            logging.getLogger(__name__).error("trigger_task_now %s failed: %s", job, exc)
 
     threading.Thread(target=_run, daemon=True).start()
     return JsonResponse({"success": True, "message": f"{task_path} triggered (running in background)."})
@@ -3627,7 +3627,7 @@ def backfill_viewids():
             elif hasattr(match, "matchid"):
                 match.matchid = composite_id
             match.save()
-    print("Backfilling complete.")
+    logger.info("Backfilling complete.")
 
 
 
