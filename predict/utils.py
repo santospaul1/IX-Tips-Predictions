@@ -502,49 +502,16 @@ def fetch_matches_by_date(api_key, competition_code, match_date, retries=2, dela
     Returns API-style match objects for a given date and competition.
     match_date: "YYYY-MM-DD"
     """
-    from .providers import (is_af, is_lf, is_uk, af_fetch_matches_by_date,
-                            lf_fetch_matches_by_date, uk_fetch_matches_by_date)
-    if is_af(competition_code):
-        return af_fetch_matches_by_date(competition_code, match_date)
-    if is_lf(competition_code):
-        return lf_fetch_matches_by_date(competition_code, match_date)
-    if is_uk(competition_code):
-        return uk_fetch_matches_by_date(competition_code, match_date)
-
-    url = f"{BASE_URL}/matches"
-    headers = {"X-Auth-Token": api_key or API_TOKEN}
-    match_date_obj = datetime.strptime(match_date, "%Y-%m-%d")
-    params = {
-        "competitions": competition_code,
-        "dateFrom": match_date_obj.strftime("%Y-%m-%d"),
-        "dateTo": (match_date_obj + timedelta(days=1)).strftime("%Y-%m-%d")
-    }
-    json_data = _get_json(url, headers=headers, params=params, retries=retries, delay=delay)
-    if not json_data:
-        return []
-    return json_data.get("matches", [])
+    from .providers import dispatch_provider
+    return dispatch_provider(competition_code, "fetch_matches_by_date", match_date)
 
 
 def fetch_matches_by_season(api_key, competition_code, season_year):
     """
     Wrapper to fetch matches for a season year.
     """
-    from .providers import (is_af, is_lf, is_uk, af_fetch_matches_by_season,
-                            lf_fetch_matches_by_season, uk_fetch_matches_by_season)
-    if is_af(competition_code):
-        return af_fetch_matches_by_season(competition_code, season_year)
-    if is_lf(competition_code):
-        return lf_fetch_matches_by_season(competition_code, season_year)
-    if is_uk(competition_code):
-        return uk_fetch_matches_by_season(competition_code, season_year)
-
-    url = f"{BASE_URL}/competitions/{competition_code}/matches"
-    headers = {"X-Auth-Token": api_key or API_TOKEN}
-    params = {"season": season_year}
-    json_data = _get_json(url, headers=headers, params=params, retries=2)
-    if not json_data:
-        return []
-    return json_data.get("matches", [])
+    from .providers import dispatch_provider
+    return dispatch_provider(competition_code, "fetch_matches_by_season", season_year)
 
 
 def fetch_season_matches(api_key, competition_code, season):
@@ -569,15 +536,15 @@ def fetch_competition_scorers(competition_code):
     if cached is not None:
         return cached
 
-    from .providers import is_af, is_lf, is_uk, af_fetch_scorers
-    if is_af(competition_code):
+    from .providers import dispatch_provider, is_af, is_lf, is_uk
+    # LF and UK don't have scorer data; AF has its own fetcher.
+    if is_lf(competition_code) or is_uk(competition_code):
+        scorers = []
+    elif is_af(competition_code):
+        from .providers import af_fetch_scorers
         scorers = af_fetch_scorers(competition_code)
-    elif is_lf(competition_code) or is_uk(competition_code):
-        scorers = []  # LF/UK: no scorer feed (LF saves quota; UK CSVs lack players)
     else:
-        url = f"{BASE_URL}/competitions/{competition_code}/scorers"
-        json_data = _get_json(url, headers=HEADERS, retries=2)
-        scorers = json_data.get("scorers", []) if json_data else []
+        scorers = dispatch_provider(competition_code, "fetch_scorers")
     cache.set(cache_key, scorers, timeout=60 * 60 * 12)
     return scorers
 
@@ -2200,24 +2167,12 @@ def get_league_table(competition):
     if cached:
         return cached
 
-    from .providers import (is_af, is_lf, is_uk, af_fetch_standings,
-                            lf_fetch_standings, uk_fetch_standings)
+    from .providers import dispatch_provider, is_af
     if is_af(competition):
+        from .providers import af_fetch_standings
         table = af_fetch_standings(competition)
-    elif is_lf(competition):
-        table = lf_fetch_standings(competition)
-    elif is_uk(competition):
-        table = uk_fetch_standings(competition)
     else:
-        url = f"{BASE_URL}/competitions/{competition}/standings"
-        json_data = _get_json(url, headers={"X-Auth-Token": API_TOKEN}, retries=2)
-        if not json_data:
-            return []
-        # defensive: some competitions may not have standings structure
-        try:
-            table = json_data.get("standings", [])[0].get("table", [])
-        except Exception:
-            table = []
+        table = dispatch_provider(competition, "fetch_standings")
     cache.set(cache_key, table, timeout=60 * 60 * 6)
     return table
 
@@ -2228,13 +2183,10 @@ def fetch_and_cache_team_metadata():
       - competition_meta::<code>
       - team_meta::<team name>
     """
-    from .providers import (is_af, is_lf, is_uk, af_fetch_teams,
-                            lf_fetch_teams, uk_fetch_teams)
+    from .providers import dispatch_provider, is_fd
     for comp_code, comp_name in COMPETITIONS.items():
-        if is_af(comp_code) or is_lf(comp_code) or is_uk(comp_code):
-            fetch_teams = (af_fetch_teams if is_af(comp_code)
-                           else lf_fetch_teams if is_lf(comp_code) else uk_fetch_teams)
-            _, teams = fetch_teams(comp_code)
+        if not is_fd(comp_code):
+            _, teams = dispatch_provider(comp_code, "fetch_teams")
             if not teams:
                 continue
             comp_meta = {"name": comp_name, "crest": ""}

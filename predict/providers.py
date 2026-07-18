@@ -19,6 +19,8 @@ import requests
 from django.core.cache import cache
 
 from .constants import (
+    API_TOKEN,
+    BASE_URL,
     APIFOOTBALL_CALENDAR_YEAR,
     APIFOOTBALL_LEAGUE_IDS,
     COMPETITION_PROVIDERS,
@@ -57,6 +59,55 @@ def is_lf(competition_code):
 
 def is_uk(competition_code):
     return get_provider(competition_code) == "UK"
+
+
+def is_fd(competition_code):
+    return get_provider(competition_code) == "FD"
+
+
+# ── Provider dispatch ─────────────────────────────────────────────────────────
+# Single dispatch table that all fetcher functions delegate to. When adding a
+# new provider, register it here and every fetch function picks it up — no need
+# to edit 6+ separate if/elif chains.
+
+_PROVIDER_DISPATCH = {
+    "FD": {},
+    "AF": {},
+    "LF": {},
+    "UK": {},
+}
+
+
+def _register(providers=None, *, operation):
+    """
+    Decorator that registers a function in the dispatch table for one or more
+    providers. Example:
+
+        @_register(providers=["LF","UK"], operation="fetch_matches_by_season")
+        def lf_fetch_matches_by_season(code, season): ...
+
+        @_register(providers=["FD"], operation="fetch_matches_by_date")
+        def fd_fetch_matches_by_date(code, match_date): ...
+    """
+    def decorator(fn):
+        for p in (providers or []):
+            _PROVIDER_DISPATCH[p][operation] = fn
+        return fn
+    return decorator
+
+
+def dispatch_provider(competition_code, operation, *args, **kwargs):
+    """
+    Call the registered handler for `competition_code` and `operation`, falling
+    back to FD. Raises KeyError if no handler is registered for either.
+    """
+    provider = get_provider(competition_code)
+    fn = _PROVIDER_DISPATCH.get(provider, {}).get(operation)
+    if fn is None:
+        fn = _PROVIDER_DISPATCH.get("FD", {}).get(operation)
+    if fn is None:
+        raise KeyError(f"No provider registered for operation '{operation}' (provider={provider})")
+    return fn(competition_code, *args, **kwargs)
 
 
 # ── Low-level request ─────────────────────────────────────────────────────────
@@ -349,6 +400,7 @@ def lf_refresh_season(competition_code):
     return len(_lf_season_matches(competition_code, force_refresh=True))
 
 
+@_register(providers=["LF"], operation="fetch_matches_by_date")
 def lf_fetch_matches_by_date(competition_code, match_date):
     """match_date 'YYYY-MM-DD' — filter the cached season dump by kickoff date."""
     day = str(match_date)[:10]
@@ -356,14 +408,20 @@ def lf_fetch_matches_by_date(competition_code, match_date):
             if (m.get("utcDate") or "")[:10] == day]
 
 
+@_register(providers=["LF"], operation="fetch_matches_by_season")
 def lf_fetch_matches_by_season(competition_code, season_year=None):
     """Return the full season dump (training uses the FINISHED ones)."""
     return _lf_season_matches(competition_code)
 
 
-def lf_fetch_standings(competition_code):
-    """Compute a standings table from finished matches in the cached dump."""
-    matches = _lf_season_matches(competition_code)
+def _compute_standings_table(matches):
+    """
+    Build a standings table from a list of normalised match dicts with keys:
+        homeTeam.name, awayTeam.name, status, score.fullTime.{home,away}
+    Returns a list of row dicts sorted by points/ GD / GF, each with keys:
+        position, team.{name,shortName,crest,tla}, playedGames, won, draw, lost,
+        points, goalsFor, goalsAgainst, goalDifference
+    """
     rows = {}
 
     def _row(name):
@@ -374,7 +432,7 @@ def lf_fetch_standings(competition_code):
         })
 
     for m in matches:
-        if m["status"] != "FINISHED":
+        if m.get("status") != "FINISHED":
             continue
         h, a = m["homeTeam"]["name"], m["awayTeam"]["name"]
         hg, ag = m["score"]["fullTime"]["home"], m["score"]["fullTime"]["away"]
@@ -400,6 +458,13 @@ def lf_fetch_standings(competition_code):
     return table
 
 
+@_register(providers=["LF"], operation="fetch_standings")
+def lf_fetch_standings(competition_code):
+    """Compute standings from the cached LF season dump."""
+    return _compute_standings_table(_lf_season_matches(competition_code))
+
+
+@_register(providers=["LF"], operation="fetch_teams")
 def lf_fetch_teams(competition_code):
     """Derive teams (with FotMob crests) from the cached dump — no extra API call."""
     crests = {}
@@ -560,12 +625,14 @@ def _uk_current_matches(competition_code):
     return matches
 
 
+@_register(providers=["UK"], operation="fetch_matches_by_date")
 def uk_fetch_matches_by_date(competition_code, match_date):
     day = str(match_date)[:10]
     return [m for m in _uk_current_matches(competition_code)
             if (m.get("utcDate") or "")[:10] == day]
 
 
+@_register(providers=["UK"], operation="fetch_matches_by_season")
 def uk_fetch_matches_by_season(competition_code, season_year):
     """Past/current season results for training."""
     mapping = FOOTBALL_DATA_UK_CODES.get(competition_code)
@@ -577,43 +644,14 @@ def uk_fetch_matches_by_season(competition_code, season_year):
     return [m for m in _uk_main_season(fduk_code, season_year) if m["status"] == "FINISHED"]
 
 
+@_register(providers=["UK"], operation="fetch_standings")
 def uk_fetch_standings(competition_code):
-    """Compute a standings table from current-season finished matches."""
-    matches = [m for m in _uk_current_matches(competition_code) if m["status"] == "FINISHED"]
-    rows = {}
-
-    def _row(name):
-        return rows.setdefault(name, {
-            "team": {"name": name, "shortName": name, "crest": None, "tla": None},
-            "playedGames": 0, "won": 0, "draw": 0, "lost": 0,
-            "points": 0, "goalsFor": 0, "goalsAgainst": 0, "goalDifference": 0,
-        })
-
-    for m in matches:
-        h, a = m["homeTeam"]["name"], m["awayTeam"]["name"]
-        hg, ag = m["score"]["fullTime"]["home"], m["score"]["fullTime"]["away"]
-        if hg is None or ag is None:
-            continue
-        hr, ar = _row(h), _row(a)
-        hr["playedGames"] += 1; ar["playedGames"] += 1
-        hr["goalsFor"] += hg; hr["goalsAgainst"] += ag
-        ar["goalsFor"] += ag; ar["goalsAgainst"] += hg
-        if hg > ag:
-            hr["won"] += 1; hr["points"] += 3; ar["lost"] += 1
-        elif hg < ag:
-            ar["won"] += 1; ar["points"] += 3; hr["lost"] += 1
-        else:
-            hr["draw"] += 1; ar["draw"] += 1; hr["points"] += 1; ar["points"] += 1
-
-    table = list(rows.values())
-    for r in table:
-        r["goalDifference"] = r["goalsFor"] - r["goalsAgainst"]
-    table.sort(key=lambda r: (r["points"], r["goalDifference"], r["goalsFor"]), reverse=True)
-    for i, r in enumerate(table, 1):
-        r["position"] = i
-    return table
+    """Compute standings from the UK current-season finished matches."""
+    finished = [m for m in _uk_current_matches(competition_code) if m["status"] == "FINISHED"]
+    return _compute_standings_table(finished)
 
 
+@_register(providers=["UK"], operation="fetch_teams")
 def uk_fetch_teams(competition_code):
     names = set()
     for m in _uk_current_matches(competition_code):
@@ -623,3 +661,95 @@ def uk_fetch_teams(competition_code):
             names.add(m["awayTeam"]["name"])
     teams = [{"name": n, "shortName": n, "crest": None} for n in sorted(names)]
     return None, teams
+
+
+# ══ FD provider — thin wrappers around football-data.org's REST API ══════════
+# These are registered in the same dispatch table so all fetcher functions can
+# use dispatch_provider() instead of manual if/elif chains.
+
+def _fd_get(path, params=None, retries=2):
+    """Call football-data.org and return parsed JSON (or {} on failure)."""
+    import time as _time
+    url = f"{BASE_URL}/{path}"
+    headers = {"X-Auth-Token": API_TOKEN}
+    for attempt in range(retries):
+        try:
+            r = requests.get(url, headers=headers, params=params, timeout=15)
+            if r.status_code == 200:
+                return r.json()
+            if r.status_code == 429:
+                _time.sleep(2 * (attempt + 1))
+        except Exception:
+            _time.sleep(2)
+    return {}
+
+
+def _fd_normalize_match(m):
+    """Normalize a football-data.org match object into the internal shape."""
+    from datetime import datetime as _dt
+    home = m.get("homeTeam", {}) or {}
+    away = m.get("awayTeam", {}) or {}
+    score = m.get("score", {}) or {}
+    ft = score.get("fullTime", {}) or {}
+    ht = score.get("halfTime", {}) or {}
+    utc = m.get("utcDate")
+    if utc:
+        try:
+            parsed = _dt.fromisoformat(utc.replace("Z", "+00:00"))
+            utc = parsed.strftime("%Y-%m-%dT%H:%M:%SZ")
+        except Exception:
+            pass
+    return {
+        "id": m.get("id"),
+        "utcDate": utc,
+        "status": m.get("status", "TIMED"),
+        "homeTeam": {"name": home.get("name"), "crest": home.get("crest")},
+        "awayTeam": {"name": away.get("name"), "crest": away.get("crest")},
+        "score": {
+            "fullTime": {"home": ft.get("home"), "away": ft.get("away")},
+            "halfTime": {"home": ht.get("home"), "away": ht.get("away")},
+        },
+    }
+
+
+@_register(providers=["FD"], operation="fetch_matches_by_date")
+def fd_fetch_matches_by_date(competition_code, match_date):
+    from datetime import datetime as _dt, timedelta as _td
+    d = _dt.strptime(str(match_date)[:10], "%Y-%m-%d")
+    params = {"competitions": competition_code,
+              "dateFrom": d.strftime("%Y-%m-%d"),
+              "dateTo": (d + _td(days=1)).strftime("%Y-%m-%d")}
+    data = _fd_get("matches", params)
+    return [_fd_normalize_match(m) for m in data.get("matches", [])]
+
+
+@_register(providers=["FD"], operation="fetch_matches_by_season")
+def fd_fetch_matches_by_season(competition_code, season_year):
+    data = _fd_get(f"competitions/{competition_code}/matches", {"season": season_year})
+    return [_fd_normalize_match(m) for m in data.get("matches", [])]
+
+
+@_register(providers=["FD"], operation="fetch_standings")
+def fd_fetch_standings(competition_code):
+    data = _fd_get(f"competitions/{competition_code}/standings")
+    try:
+        return data.get("standings", [])[0].get("table", [])
+    except (IndexError, KeyError, TypeError):
+        return []
+
+
+@_register(providers=["FD"], operation="fetch_teams")
+def fd_fetch_teams(competition_code):
+    data = _fd_get(f"competitions/{competition_code}/teams")
+    teams = data.get("teams", []) or []
+    comp_meta = {
+        "name": (data.get("competition", {}) or {}).get("name", ""),
+        "crest": (data.get("competition", {}) or {}).get("emblem", ""),
+    }
+    return comp_meta, teams
+
+
+@_register(providers=["FD"], operation="fetch_scorers")
+def fd_fetch_scorers(competition_code):
+    data = _fd_get(f"competitions/{competition_code}/scorers")
+    return data.get("scorers", []) or []

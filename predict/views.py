@@ -29,7 +29,7 @@ from django_celery_beat.models import PeriodicTask
 
 from .models import ComboSlip, ComboSlipLeg, MatchOdds, MatchPrediction, TopPick
 from .forms import ActualResultForm, PredictionForm, LivePredictionForm
-from .constants import API_TOKEN, COMPETITIONS, ODDS_API_KEY as SETTINGS_ODDS_API_KEY, country_flag_url
+from .constants import API_TOKEN, COMPETITIONS, ODDS_API_KEY as SETTINGS_ODDS_API_KEY, country_flag_url, get_team_metadata
 from .utils import (
     _market_odds_value,
     explain_pick_reasons,
@@ -220,25 +220,8 @@ def normalize_team_lookup_key(name):
 
 
 def fetch_matches_for_status_refresh(competition_code, match_date):
-    from .providers import (is_af, is_lf, is_uk, af_fetch_matches_by_date,
-                            lf_fetch_matches_by_date, uk_fetch_matches_by_date)
-    if is_af(competition_code):
-        return af_fetch_matches_by_date(competition_code, match_date)
-    if is_lf(competition_code):
-        return lf_fetch_matches_by_date(competition_code, match_date)
-    if is_uk(competition_code):
-        return uk_fetch_matches_by_date(competition_code, match_date)
-
-    url = f"{BASE_URL}/competitions/{competition_code}/matches"
-    headers = {"X-Auth-Token": API_KEY}
-    params = {"dateFrom": match_date, "dateTo": match_date}
-    try:
-        response = requests.get(url, headers=headers, params=params, timeout=15)
-        response.raise_for_status()
-        return response.json().get("matches", [])
-    except requests.exceptions.RequestException as exc:
-        print(f"[ERROR] Status refresh failed for {competition_code} {match_date}: {exc}")
-        return []
+    from .providers import dispatch_provider
+    return dispatch_provider(competition_code, "fetch_matches_by_date", match_date)
 
 
 def normalize_api_match_status(api_status):
@@ -626,7 +609,6 @@ def live_predictions_by_date(request):
 # -------------------------
 from datetime import date
 from .models import MatchPrediction
-from .utils import get_team_metadata  # make sure this exists
 
 # -------------------------
 # store_top_pick_for_date (uses picks format above)
@@ -1718,16 +1700,6 @@ def fuzzy_match_logo(team_name):
         matched_base = close_matches[0]
         return name_map[matched_base]
     return "default.png"
-
-
-def get_team_metadata(name):
-    meta = cache.get(f"team_meta::{name}", {"shortName": name, "crest": None})
-    # Fall back to the league's country flag when a team has no badge.
-    if not meta.get("crest") and meta.get("competition"):
-        flag = country_flag_url(meta["competition"])
-        if flag:
-            meta = {**meta, "crest": flag}
-    return meta
 
 
 def normalize_display_team_name(name, fallback=None, max_length=14):
@@ -3665,51 +3637,23 @@ from .models import MatchPrediction, TopPick
 
 @require_GET
 def api_predictions(request):
-    competition = request.GET.get("competition")
-    date_q = request.GET.get("date")
+    """Delegates to v1 mobile API — no duplicate data pipeline."""
+    from .api_views import api_predictions_v1
+    if hasattr(request, "_request"):
+        request = request._request
+    return api_predictions_v1(request)
 
-    predictions = MatchPrediction.objects.all()
-
-    if competition:
-        predictions = predictions.filter(competition=competition)
-
-    if date_q:
-        predictions = predictions.filter(match_date=date_q)
-
-    data = [
-        {
-            "id": p.id,
-            "competition": p.competition,
-            "match_date": str(p.match_date),
-            "home_team": p.home_team,
-            "away_team": p.away_team,
-            "predicted_home_goals": p.predicted_home_goals,
-            "predicted_away_goals": p.predicted_away_goals,
-            "actual_home_goals": p.actual_home_goals,
-            "actual_away_goals": p.actual_away_goals,
-            "status": p.status,
-        }
-        for p in predictions
-    ]
-    return JsonResponse({"predictions": data})
 
 @require_GET
 def api_top_picks(request):
-    picks = TopPick.objects.all().order_by("-match_date")[:20]
-    data = [
-        {
-            "home_team": p.home_team,
-            "away_team": p.away_team,
-            "tip": p.tip,
-            "confidence": p.confidence,
-            "odds": p.odds,
-            "match_date": str(p.match_date),
-            "is_correct": p.is_correct,
-        }
-        for p in picks
-    ]
-    return JsonResponse({"top_picks": data})
+    """Delegates to v1 mobile API — no duplicate data pipeline."""
+    from .api_views import api_top_picks_v1
+    if hasattr(request, "_request"):
+        request = request._request
+    return api_top_picks_v1(request)
+
 
 def league_table_api(request, competition_code):
-    table = cache.get(f"league_table_{competition_code}", [])
-    return JsonResponse({"table": table})
+    """Returns raw standings table — thin wrapper over shared get_league_table."""
+    from predict.utils import get_league_table
+    return JsonResponse({"table": get_league_table(competition_code)})
