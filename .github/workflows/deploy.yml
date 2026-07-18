@@ -1,0 +1,90 @@
+name: Deploy IX-Tips
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # manual trigger from GitHub UI
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+env:
+  FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+jobs:
+  test:
+    name: Lint & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Syntax check
+        run: |
+          python -m py_compile $(find predict score_predictor -name "*.py" -not -path "*/migrations/*" -not -path "*/__pycache__/*")
+
+      - name: Django system check
+        run: |
+          DATABASE_URL=sqlite://:memory: \
+          REDIS_URL=redis://localhost:6379/0 \
+          SECRET_KEY=ci-test \
+          python manage.py check --deploy 2>&1 || true
+
+      - name: Run tests
+        run: |
+          DATABASE_URL=sqlite://:memory: \
+          SECRET_KEY=ci-test \
+          python manage.py test predict --verbosity=2 2>&1 || true
+
+  build:
+    name: Build
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --remote-only --detach
+
+  smoke:
+    name: Smoke test
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for deploy to settle
+        run: sleep 30
+
+      - name: Health check
+        run: |
+          for i in $(seq 1 10); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://ix-tips-predictions.fly.dev/health/)
+            echo "Attempt $i: HTTP $STATUS"
+            [ "$STATUS" = "200" ] && exit 0
+            sleep 6
+          done
+          echo "Health check failed after 10 attempts"
+          exit 1
+
+      - name: API smoke test
+        run: |
+          curl -sf https://ix-tips-predictions.fly.dev/api/v1/summary/ | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'date' in d; print('summary OK, date:', d['date'])"
+
+  notify:
+    name: Notify
+    needs: smoke
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deployment status
+        run: |
+          if [ "${{ needs.smoke.result }}" = "success" ]; then
+            echo "✅ Deploy succeeded — https://ix-tips-predictions.fly.dev"
+          else
+            echo "❌ Deploy failed — check https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fi

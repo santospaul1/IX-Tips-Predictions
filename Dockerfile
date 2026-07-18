@@ -1,23 +1,45 @@
-FROM python:3.12-slim
+# ── Build stage: compile dependencies once (cached unless requirements change) ──
+FROM python:3.12-slim AS builder
 
-RUN apt-get update && apt-get install -y libpq-dev gcc curl tzdata && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev gcc curl tzdata postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
 
-# supercronic — container-friendly cron that runs the scheduled jobs
-# (replaces Celery beat/worker, so no Redis broker is needed).
-ENV SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/v0.2.33/supercronic-linux-amd64 \
-    SUPERCRONIC=supercronic-linux-amd64
-RUN curl -fsSLO "$SUPERCRONIC_URL" \
-    && chmod +x "$SUPERCRONIC" \
-    && mv "$SUPERCRONIC" /usr/local/bin/supercronic
+# supercronic — lightweight cron runner, no redis broker
+ENV SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/v0.2.33/supercronic-linux-amd64
+RUN curl -fsSLo /usr/local/bin/supercronic "$SUPERCRONIC_URL" \
+    && chmod +x /usr/local/bin/supercronic
 
-RUN mkdir -p /code
 WORKDIR /code
 
-COPY requirements.txt /tmp/requirements.txt
-RUN pip install --upgrade pip && pip install -r /tmp/requirements.txt && rm -rf /root/.cache/
+# Install Python deps in a cached layer
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
 
-COPY . /code/
+# ── Runtime stage: slim image, no build tools ──
+FROM python:3.12-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev tzdata postgresql-client curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy supercronic + site-packages from builder
+COPY --from=builder /usr/local/bin/supercronic /usr/local/bin/supercronic
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=builder /usr/local/bin/gunicorn /usr/local/bin/gunicorn
+
+WORKDIR /code
+COPY . .
+
+# Backups directory (daily pg_dump, 7-day retention)
+RUN mkdir -p /code/backups
 
 EXPOSE 8080
 
-CMD ["gunicorn", "--bind", ":8080", "--workers", "2", "--timeout", "120", "score_predictor.wsgi"]
+# Gunicorn with --preload: loads Django + sklearn models once, shared by all
+# workers. Single worker because sklearn models are ~50MB each — more workers
+# would OOM on the 1GB Fly VM.
+CMD ["gunicorn", "--bind", ":8080", "--workers", "1", "--timeout", "120", \
+     "--preload", "--access-logfile", "-", "--error-logfile", "-", \
+     "score_predictor.wsgi"]

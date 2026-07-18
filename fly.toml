@@ -23,6 +23,15 @@ console_command = '/code/manage.py shell'
   min_machines_running = 1
   processes = ['app']
 
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "15s"
+    method = "GET"
+    path = "/health/"
+    protocol = "http"
+    timeout = "5s"
+    type = "non-http"  # internal check — not exposed to public internet
+
 [[vm]]
   memory = '1gb'
   cpu_kind = 'shared'

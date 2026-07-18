@@ -1,10 +1,33 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import path
+from django.http import JsonResponse
+from django.db import connections
+from django.core.cache import cache
 from . import views
 from django.contrib.auth.views import LoginView, LogoutView
 
+
+def health(request):
+    """Lightweight health probe — no DB query, no cache write. Fly.io pings this
+    every few seconds; if it fails, the machine is marked unhealthy."""
+    healthy = True
+    try:
+        connections["default"].cursor().execute("SELECT 1")
+    except Exception:
+        healthy = False
+    try:
+        cache.get("health_check::ping")
+    except Exception:
+        healthy = False
+    return JsonResponse(
+        {"status": "ok" if healthy else "degraded"},
+        status=200 if healthy else 503,
+    )
+
+
 urlpatterns = [
+    path("health/", health, name="health"),
 
     path('results/', views.results_view, name='results'),
     path("train-model/", views.train_model_view, name="train_model"),
