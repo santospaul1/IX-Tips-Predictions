@@ -80,6 +80,9 @@ def _prediction_to_dict(p):
         "away_form": get_team_recent_form(p.away_team, p.competition),
         "predicted_home_goals": p.predicted_home_goals,
         "predicted_away_goals": p.predicted_away_goals,
+        # Raw rate parameters (Poisson λ) — absent for old pre-migration predictions
+        "predicted_home_rate": getattr(p, "predicted_home_rate", None),
+        "predicted_away_rate": getattr(p, "predicted_away_rate", None),
         "winner": winner,
         "display_odds": display_odds,
         "status": p.status,

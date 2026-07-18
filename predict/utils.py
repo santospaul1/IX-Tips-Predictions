@@ -1457,6 +1457,19 @@ def get_or_train_model_bundle(competition_code, force_refresh=False):
     return bundle
 
 
+def _poisson_best_scoreline(home_rate, away_rate):
+    """Pick the single most-likely integer scoreline from Poisson(λh)×Poisson(λa)."""
+    from math import exp, factorial as _fac
+    best, best_prob = (0, 0), -1.0
+    for h in range(0, 7):
+        for a in range(0, 7):
+            p = float(exp(-home_rate) * (home_rate ** h) / _fac(h)) * \
+                float(exp(-away_rate) * (away_rate ** a) / _fac(a))
+            if p > best_prob:
+                best_prob, best = p, (h, a)
+    return best  # (home_goals, away_goals)
+
+
 def predict_match_outcome(home_team, away_team, models, label_encoder=None):
     """
     Given home/away names, and tuple (model_home, model_away, maybe_features),
@@ -1510,17 +1523,21 @@ def predict_match_outcome(home_team, away_team, models, label_encoder=None):
         ph = 1.0
         pa = 1.0
 
-    ph_ = int(round(np.clip(ph, 0, 10)))
-    pa_ = int(round(np.clip(pa, 0, 10)))
+    # Keep raw float rates (Poisson λ).  Rounding to ints destroys the
+    # distribution — real football sees clean sheets in ~30% of matches, but
+    # int(round(x)) never produces 0 when the regression always outputs ≥ 0.6.
+    raw_h = float(np.clip(ph, 0.1, 6))
+    raw_a = float(np.clip(pa, 0.1, 6))
+    disp_h, disp_a = _poisson_best_scoreline(raw_h, raw_a)
 
-    if ph_ > pa_:
+    if disp_h > disp_a:
         result = "Home Win"
-    elif pa_ > ph_:
+    elif disp_a > disp_h:
         result = "Away Win"
     else:
         result = "Draw"
 
-    return result, ph_, pa_
+    return result, disp_h, disp_a, raw_h, raw_a
 
 
 # ---------- saving predictions (compatibility with tasks.py) ----------
@@ -1558,9 +1575,12 @@ def save_predictions(matches, model_home=None, model_away=None, le=None, match_d
             mdate = match_date or (utc[:10] if utc else None)
 
             # If models provided: prepare input for prediction
+            predicted_home_rate = None
+            predicted_away_rate = None
             if (model_home is not None) and (model_away is not None):
                 if isinstance(le, dict):
-                    _, ph, pa = predict_match_outcome(home, away, (model_home, model_away, le))
+                    _, predicted_home_goals, predicted_away_goals, predicted_home_rate, predicted_away_rate = \
+                        predict_match_outcome(home, away, (model_home, model_away, le))
                 elif le is not None:
                     try:
                         input_df = pd.DataFrame({"home_team": [home], "away_team": [away]})
@@ -1571,18 +1591,19 @@ def save_predictions(matches, model_home=None, model_away=None, le=None, match_d
                         continue
 
                     try:
-                        ph = model_home.predict(input_df)[0]
-                        pa = model_away.predict(input_df)[0]
+                        predicted_home_rate = float(model_home.predict(input_df)[0])
+                        predicted_away_rate = float(model_away.predict(input_df)[0])
                     except Exception:
-                        ph = float(model_home.predict(input_df)[0]) if hasattr(model_home, "predict") else 1.0
-                        pa = float(model_away.predict(input_df)[0]) if hasattr(model_away, "predict") else 1.0
-                else:
-                    _, ph, pa = predict_match_outcome(home, away, (model_home, model_away, None))
+                        predicted_home_rate = 1.0
+                        predicted_away_rate = 1.0
 
-                predicted_home_goals = int(round(np.clip(ph, 0, 10)))
-                predicted_away_goals = int(round(np.clip(pa, 0, 10)))
+                    predicted_home_goals, predicted_away_goals = _poisson_best_scoreline(
+                        predicted_home_rate, predicted_away_rate)
+                else:
+                    _, predicted_home_goals, predicted_away_goals, predicted_home_rate, predicted_away_rate = \
+                        predict_match_outcome(home, away, (model_home, model_away, None))
             else:
-                # No models supplied -> try to read existing predictions in match (if matches are dicts with prediction)
+                # No models supplied -> try to read existing predictions in match
                 predicted_home_goals = int(match.get("predicted_home_goals", 0))
                 predicted_away_goals = int(match.get("predicted_away_goals", 0))
 
@@ -1617,6 +1638,8 @@ def save_predictions(matches, model_home=None, model_away=None, le=None, match_d
                         "away_team": away,
                         "predicted_home_goals": predicted_home_goals,
                         "predicted_away_goals": predicted_away_goals,
+                        "predicted_home_rate": predicted_home_rate,
+                        "predicted_away_rate": predicted_away_rate,
                         "predicted_result": predicted_result,
                         "market_over_1_5": market_over_1_5,
                         "market_over_2_5": market_over_2_5,

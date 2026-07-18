@@ -11,6 +11,12 @@ class MatchPrediction(models.Model):
 
     predicted_home_goals = models.IntegerField(null=True, blank=True)
     predicted_away_goals = models.IntegerField(null=True, blank=True)
+    # Raw float rates from the regression model (expected goals λ).  Stored
+    # separately so the Poisson-based scoreline distribution (which naturally
+    # produces 0-goal outcomes) works correctly even after the display score
+    # has been rounded to an integer.
+    predicted_home_rate = models.FloatField(null=True, blank=True)
+    predicted_away_rate = models.FloatField(null=True, blank=True)
     predicted_result = models.CharField(max_length=10, null=True, blank=True)  # Home / Away / Draw
 
     # ✅ Betting markets

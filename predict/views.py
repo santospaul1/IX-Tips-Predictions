@@ -1926,7 +1926,9 @@ def build_match_detail_context(prediction, source=None):
         odds_obj = None
 
     market_rows, feature_snapshot = _build_market_rows(prediction, {})
-    scorelines = scoreline_predictions(prediction.predicted_home_goals, prediction.predicted_away_goals)
+    rate_h = getattr(prediction, "predicted_home_rate", None) or prediction.predicted_home_goals or 1.0
+    rate_a = getattr(prediction, "predicted_away_rate", None) or prediction.predicted_away_goals or 1.0
+    scorelines = scoreline_predictions(rate_h, rate_a)
 
     _, scorer_rows = build_anytime_scorer_rows(prediction.match_date.isoformat())
     scorer_row = next(
