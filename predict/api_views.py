@@ -30,9 +30,14 @@ competitions = COMPETITIONS
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
-def _prediction_to_dict(p):
-    meta_home = get_team_metadata(p.home_team)
-    meta_away = get_team_metadata(p.away_team)
+def _prediction_to_dict(p, team_meta_cache=None, form_cache=None, kickoff_cache=None):
+    """Serialize a MatchPrediction. Pass pre-fetched dicts to avoid N cache reads."""
+    if team_meta_cache is not None:
+        meta_home = team_meta_cache.get(p.home_team) or get_team_metadata(p.home_team)
+        meta_away = team_meta_cache.get(p.away_team) or get_team_metadata(p.away_team)
+    else:
+        meta_home = get_team_metadata(p.home_team)
+        meta_away = get_team_metadata(p.away_team)
     winner = None
     if p.predicted_home_goals is not None and p.predicted_away_goals is not None:
         if p.predicted_home_goals > p.predicted_away_goals:
@@ -71,13 +76,16 @@ def _prediction_to_dict(p):
         "competition_code": p.competition,
         "competition_logo": f"logos/{p.competition}.png",
         "match_date": str(p.match_date),
-        "match_time": get_cached_kickoff_time(p.competition, p.match_date, p.home_team, p.away_team),
+        "match_time": (
+            (kickoff_cache or {}).get((p.competition, str(p.match_date), p.home_team, p.away_team))
+            or get_cached_kickoff_time(p.competition, p.match_date, p.home_team, p.away_team)
+        ),
         "home_team": normalize_display_team_name(meta_home.get("shortName"), fallback=p.home_team),
         "away_team": normalize_display_team_name(meta_away.get("shortName"), fallback=p.away_team),
         "home_logo": meta_home.get("crest") or country_flag_url(p.competition),
         "away_logo": meta_away.get("crest") or country_flag_url(p.competition),
-        "home_form": get_team_recent_form(p.home_team, p.competition),
-        "away_form": get_team_recent_form(p.away_team, p.competition),
+        "home_form": (form_cache or {}).get((p.home_team, p.competition), []),
+        "away_form": (form_cache or {}).get((p.away_team, p.competition), []),
         "predicted_home_goals": p.predicted_home_goals,
         "predicted_away_goals": p.predicted_away_goals,
         # Raw rate parameters (Poisson λ) — absent for old pre-migration predictions
@@ -131,20 +139,40 @@ def api_predictions_v1(request):
     page = max(1, int(request.GET.get("page", 1)))
     page_size = min(50, max(5, int(request.GET.get("page_size", 20))))
 
-    qs = MatchPrediction.objects.filter(match_date=date_str).order_by("competition", "home_team")
+    qs = (MatchPrediction.objects
+          .filter(match_date=date_str)
+          .select_related("odds")       # avoids N queries inside _prediction_to_dict
+          .order_by("competition", "home_team"))
     if competition:
         qs = qs.filter(competition=competition)
 
     total = qs.count()
     start = (page - 1) * page_size
-    predictions = qs[start : start + page_size]
+    predictions = list(qs[start : start + page_size])
+
+    # Batch-resolve all per-row lookups — O(unique_teams) instead of O(2N).
+    team_names = {p.home_team for p in predictions} | {p.away_team for p in predictions}
+    team_meta = {name: get_team_metadata(name) for name in team_names}
+
+    form_pairs = {(p.home_team, p.competition) for p in predictions} | \
+                 {(p.away_team, p.competition) for p in predictions}
+    form_cache = {(t, c): get_team_recent_form(t, c) for t, c in form_pairs}
+
+    kickoff_cache = {
+        (p.competition, str(p.match_date), p.home_team, p.away_team):
+            get_cached_kickoff_time(p.competition, p.match_date, p.home_team, p.away_team)
+        for p in predictions
+    }
 
     return Response({
         "date": date_str,
         "total": total,
         "page": page,
         "page_size": page_size,
-        "predictions": [_prediction_to_dict(p) for p in predictions],
+        "predictions": [_prediction_to_dict(p, team_meta_cache=team_meta,
+                                            form_cache=form_cache,
+                                            kickoff_cache=kickoff_cache)
+                        for p in predictions],
     })
 
 
@@ -160,20 +188,26 @@ def api_top_picks_v1(request):
     date_str = request.GET.get("date") or timezone.localdate().isoformat()
     variant = request.GET.get("variant", "1")
 
-    picks = TopPick.objects.filter(match_date=date_str, variant=variant).order_by("-confidence")
+    picks_qs = TopPick.objects.filter(match_date=date_str, variant=variant).order_by("-confidence")
+    picks = list(picks_qs)
 
+    # Batch-resolve: one query for scores, one pass for team metadata.
     match_scores = {}
     for mp in MatchPrediction.objects.filter(match_date=date_str).values(
         "home_team", "away_team", "actual_home_goals", "actual_away_goals"
     ):
-        key = (mp["home_team"], mp["away_team"])
         if mp["actual_home_goals"] is not None and mp["actual_away_goals"] is not None:
-            match_scores[key] = f"{mp['actual_home_goals']}-{mp['actual_away_goals']}"
+            match_scores[(mp["home_team"], mp["away_team"])] = (
+                f"{mp['actual_home_goals']}-{mp['actual_away_goals']}"
+            )
+
+    team_names = {p.home_team for p in picks} | {p.away_team for p in picks}
+    team_meta = {name: get_team_metadata(name) for name in team_names}
 
     data = []
     for p in picks:
-        meta_home = get_team_metadata(p.home_team)
-        meta_away = get_team_metadata(p.away_team)
+        meta_home = team_meta.get(p.home_team, {"shortName": p.home_team})
+        meta_away = team_meta.get(p.away_team, {"shortName": p.away_team})
         actual_score = match_scores.get((p.home_team, p.away_team))
         data.append({
             "match_date": str(p.match_date),
@@ -398,18 +432,31 @@ def api_summary(request):
     """
     GET /api/v1/summary/
     Returns counts for today to populate the home screen dashboard.
+    Cached for 5 min — the live-refresh cron runs on the same interval.
     """
-    today = timezone.localdate().isoformat()
-    predictions_count = MatchPrediction.objects.filter(match_date=today).count()
-    top_picks_count = TopPick.objects.filter(match_date=today).count()
-    won_today = TopPick.objects.filter(match_date=today, is_correct=True).count()
-    settled_today = TopPick.objects.filter(match_date=today, is_correct__isnull=False).count()
+    from django.core.cache import cache
 
-    return Response({
+    today = timezone.localdate().isoformat()
+    ck = f"summary_v1::{today}"
+    cached = cache.get(ck)
+    if cached is not None:
+        return Response(cached)
+
+    # Single aggregation per table instead of 4 separate COUNT queries.
+    tp_qs = TopPick.objects.filter(match_date=today)
+    top_picks_count = tp_qs.count()
+    settled_today = tp_qs.filter(is_correct__isnull=False).count()
+    won_today = tp_qs.filter(is_correct=True).count()
+
+    predictions_count = MatchPrediction.objects.filter(match_date=today).count()
+
+    data = {
         "date": today,
         "predictions": predictions_count,
         "top_picks": top_picks_count,
         "won_today": won_today,
         "settled_today": settled_today,
         "accuracy_today": round(won_today / settled_today * 100, 1) if settled_today else None,
-    })
+    }
+    cache.set(ck, data, timeout=300)
+    return Response(data)

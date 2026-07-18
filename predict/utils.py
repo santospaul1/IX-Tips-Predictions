@@ -2058,7 +2058,10 @@ def store_top_pick_for_date(predictions_by_date, variant="1"):
                 ))
         if all_picks:
             TopPick.objects.bulk_create(all_picks)
+            # Invalidate downstream caches so the mobile app picks up new picks.
             cache.delete("top_pick_slip_summary_v1")
+            for date_str in (predictions_by_date or {}):
+                cache.delete(f"summary_v1::{date_str}")
     return len(all_picks)
 
 
