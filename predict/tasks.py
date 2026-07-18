@@ -119,7 +119,7 @@ def update_metadata_task():
 def store_daily_top_pick():
     stored = {}
     for variant in ("1", "2", "3", "4"):
-        TopPick.objects.filter(variant=variant, match_date__gte=date.today()).delete()
+        # (delete now handled atomically inside store_top_pick_for_date)
         predictions = get_top_predictions_for_variant(limit=(20 if variant == "4" else 10), variant=variant)
         stored[variant] = store_top_pick_for_date(predictions, variant=variant)
     return stored
@@ -131,7 +131,7 @@ def refresh_daily_odds_cache():
     updated = update_all_odds()
     stored_top_picks = {}
     for variant in ("1", "2", "3", "4"):
-        TopPick.objects.filter(variant=variant, match_date__gte=date.today()).delete()
+        # (delete now handled atomically inside store_top_pick_for_date)
         top_predictions = get_top_predictions_for_variant(limit=(20 if variant == "4" else 10), variant=variant)
         stored_top_picks[variant] = store_top_pick_for_date(top_predictions, variant=variant)
     return {
@@ -166,7 +166,7 @@ def refresh_live_match_data():
 
     stored_top_picks = {}
     for variant in ("1", "2", "3", "4"):
-        TopPick.objects.filter(variant=variant, match_date__gte=today).delete()
+        # (delete now handled atomically inside store_top_pick_for_date)
         top_predictions = get_top_predictions_for_variant(limit=(20 if variant == "4" else 10), variant=variant)
         stored_top_picks[variant] = store_top_pick_for_date(top_predictions, variant=variant)
 

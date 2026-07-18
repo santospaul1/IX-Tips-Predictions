@@ -1796,7 +1796,9 @@ def _collect_top_pick_candidates(rank_limit=4):
             model_bundles[competition_code] = get_or_train_model_bundle(competition_code)
 
         bundle = model_bundles.get(competition_code)
-        model_context = bundle[2] if bundle and len(bundle) == 3 else {}
+        if bundle is None or len(bundle) != 3:
+            continue  # no model for this competition — skip, don't generate low-quality picks
+        model_context = bundle[2] if isinstance(bundle[2], dict) else {}
         ranked_markets, _ = score_top_pick_markets(m, model_context)
         if not ranked_markets:
             continue
@@ -2027,30 +2029,37 @@ def get_top_predictions_for_variant(limit=10, variant="1"):
 
 
 def store_top_pick_for_date(predictions_by_date, variant="1"):
+    """
+    Atomically replaces TopPicks for the given dates+variant. Wrapped in a
+    transaction so external readers never see an empty table between the
+    delete and the bulk_create (would show as "no picks" in the mobile app).
+    """
+    from django.db import transaction
+
     if TopPick is None:
         return 0
     all_picks = []
-    for date_str, picks in (predictions_by_date or {}).items():
-        try:
-            match_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-        except Exception:
-            continue
-        TopPick.objects.filter(match_date=match_date, variant=variant).delete()
-        for p in picks:
-            all_picks.append(TopPick(
-                match_date=match_date,
-                home_team=p["home_team"],
-                away_team=p["away_team"],
-                variant=variant,
-                tip=p["tip"],
-                confidence=p.get("confidence", 0),
-                odds=p.get("odds"),
-            ))
-    if all_picks:
-        TopPick.objects.bulk_create(all_picks)
-        cache.delete("top_pick_slip_summary_v1")
-        return len(all_picks)
-    return 0
+    with transaction.atomic():
+        for date_str, picks in (predictions_by_date or {}).items():
+            try:
+                match_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            except Exception:
+                continue
+            TopPick.objects.filter(match_date=match_date, variant=variant).delete()
+            for p in picks:
+                all_picks.append(TopPick(
+                    match_date=match_date,
+                    home_team=p["home_team"],
+                    away_team=p["away_team"],
+                    variant=variant,
+                    tip=p["tip"],
+                    confidence=p.get("confidence", 0),
+                    odds=p.get("odds"),
+                ))
+        if all_picks:
+            TopPick.objects.bulk_create(all_picks)
+            cache.delete("top_pick_slip_summary_v1")
+    return len(all_picks)
 
 
 def update_actuals_for_top_picks(picks_qs):
