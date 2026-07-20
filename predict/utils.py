@@ -954,11 +954,15 @@ def _summarize_head_to_head(home_team, away_team, h2h_matches, lookback, default
             "goal_diff": 0.0,
             "total_goals": float(default_total_goals),
             "match_count": 0.0,
+            "btts_rate": 0.5,   # neutral default
+            "over25_rate": 0.5,
         }
 
     home_points = []
     home_goal_diff = []
     total_goals = []
+    btts_count = 0
+    over25_count = 0
     for match in recent_matches:
         if match["home_team"] == home_team:
             home_goals = float(match["home_goals"])
@@ -969,12 +973,19 @@ def _summarize_head_to_head(home_team, away_team, h2h_matches, lookback, default
         home_points.append(3 if home_goals > away_goals else 1 if home_goals == away_goals else 0)
         home_goal_diff.append(home_goals - away_goals)
         total_goals.append(home_goals + away_goals)
+        if home_goals > 0 and away_goals > 0:
+            btts_count += 1
+        if home_goals + away_goals >= 3:
+            over25_count += 1
 
+    n = len(recent_matches)
     return {
         "home_points": _weighted_mean(home_points, 1.35),
         "goal_diff": _weighted_mean(home_goal_diff, 0.0),
         "total_goals": _weighted_mean(total_goals, default_total_goals),
-        "match_count": float(len(recent_matches)),
+        "match_count": float(n),
+        "btts_rate": btts_count / n if n > 0 else 0.5,
+        "over25_rate": over25_count / n if n > 0 else 0.5,
     }
 
 
@@ -1065,12 +1076,21 @@ def _build_feature_row(home_team, away_team, team_profiles, h2h_profiles, league
         "h2h_goal_diff": h2h_summary["goal_diff"],
         "h2h_total_goals": h2h_summary["total_goals"],
         "h2h_match_count": h2h_summary["match_count"],
+        "h2h_btts_rate": h2h_summary["btts_rate"],
+        "h2h_over25_rate": h2h_summary["over25_rate"],
         "home_elo": home_elo,
         "away_elo": away_elo,
         "elo_gap": home_elo - away_elo,
         "elo_home_win_prob": _expected_home_result_from_elo(home_elo, away_elo),
         "home_advantage": league_defaults["home_goals"] - league_defaults["away_goals"],
     }
+    # ── League experience (promoted teams have 0 matches; veterans have 200+) ──
+    home_exp = max(0, len(home_profile.get("overall_points", [])))
+    away_exp = max(0, len(away_profile.get("overall_points", [])))
+    row["home_experience"] = float(home_exp)
+    row["away_experience"] = float(away_exp)
+    row["experience_gap"] = float(home_exp - away_exp)
+
     # ── Betting-odds features (closing market odds → implied probabilities) ──
     # Non-zero only for UK leagues where odds CSV columns exist; zero for FD/LF.
     odds = odds_row or {}
@@ -1159,11 +1179,16 @@ def build_training_features(df, lookback=8):
         "h2h_goal_diff",
         "h2h_total_goals",
         "h2h_match_count",
+        "h2h_btts_rate",
+        "h2h_over25_rate",
         "home_elo",
         "away_elo",
         "elo_gap",
         "elo_home_win_prob",
         "home_advantage",
+        "home_experience",
+        "away_experience",
+        "experience_gap",
         "odds_home_implied",
         "odds_draw_implied",
         "odds_away_implied",
