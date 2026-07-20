@@ -1039,7 +1039,7 @@ def _build_feature_row(home_team, away_team, team_profiles, h2h_profiles, league
         default_total_goals=league_defaults["home_goals"] + league_defaults["away_goals"],
     )
 
-    return {
+    row = {
         "home_recent_scored": home_summary["recent_scored"],
         "home_recent_conceded": home_summary["recent_conceded"],
         "away_recent_scored": away_summary["recent_scored"],
