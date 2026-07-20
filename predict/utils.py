@@ -1366,8 +1366,8 @@ def train_models(X, y_home, y_away, sample_weight=None):
             objective="count:poisson",
             max_depth=6,
             learning_rate=0.05,
-            subsample=0.8,
-            colsample_bytree=0.8,
+            subsample=1.0,
+            colsample_bytree=1.0,
             random_state=42,
             n_jobs=-1,
         )
@@ -1376,8 +1376,8 @@ def train_models(X, y_home, y_away, sample_weight=None):
             objective="count:poisson",
             max_depth=6,
             learning_rate=0.05,
-            subsample=0.8,
-            colsample_bytree=0.8,
+            subsample=1.0,
+            colsample_bytree=1.0,
             random_state=42,
             n_jobs=-1,
         )
@@ -1514,12 +1514,13 @@ def get_or_train_model_bundle(competition_code, force_refresh=False):
     return bundle
 
 
-def _poisson_best_scoreline(home_rate, away_rate):
+def _poisson_best_scoreline(home_rate, away_rate, seed=None):
     """Pick an integer scoreline by weighted random sampling from the full
-    Poisson(λh)×Poisson(λa) distribution.  This produces the correct variety
-    across predictions — a 3-0 score with 5 % probability will appear ~5 %
-    of the time — instead of always picking the single most-likely outcome
-    (the mode), which collapses to 1-1/2-1 for typical football λ rates."""
+    Poisson(λh)×Poisson(λa) distribution, deterministic when seed is provided.
+
+    With seed (hash of team names): the SAME fixture always gets the SAME
+    scoreline across runs. Without seed: pure random (use for variety where
+    determinism doesn't matter)."""
     from math import exp, factorial as _fac
     import random as _random
     scores, weights = [], []
@@ -1531,14 +1532,15 @@ def _poisson_best_scoreline(home_rate, away_rate):
             scores.append((h, a))
             weights.append(p)
             total += p
-    # Normalize + weighted random pick
-    r = _random.random() * total
+    # Weighted pick — deterministic when seed is provided
+    rng = _random.Random(seed) if seed is not None else _random
+    r = rng.random() * total
     cumulative = 0.0
     for (h, a), w in zip(scores, weights):
         cumulative += w
         if r <= cumulative:
             return (h, a)
-    return scores[-1]  # fallback (should never reach here)
+    return scores[-1]
 
 
 def predict_match_outcome(home_team, away_team, models, label_encoder=None):
@@ -1599,7 +1601,8 @@ def predict_match_outcome(home_team, away_team, models, label_encoder=None):
     # int(round(x)) never produces 0 when the regression always outputs ≥ 0.6.
     raw_h = float(np.clip(ph, 0.1, 6))
     raw_a = float(np.clip(pa, 0.1, 6))
-    disp_h, disp_a = _poisson_best_scoreline(raw_h, raw_a)
+    seed = hash((home_team, away_team)) & 0xFFFFFFFF
+    disp_h, disp_a = _poisson_best_scoreline(raw_h, raw_a, seed=seed)
 
     if disp_h > disp_a:
         result = "Home Win"
@@ -1669,7 +1672,8 @@ def save_predictions(matches, model_home=None, model_away=None, le=None, match_d
                         predicted_away_rate = 1.0
 
                     predicted_home_goals, predicted_away_goals = _poisson_best_scoreline(
-                        predicted_home_rate, predicted_away_rate)
+                        predicted_home_rate, predicted_away_rate,
+                        seed=hash((home, away)) & 0xFFFFFFFF)
                 else:
                     _, predicted_home_goals, predicted_away_goals, predicted_home_rate, predicted_away_rate = \
                         predict_match_outcome(home, away, (model_home, model_away, None))
