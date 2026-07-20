@@ -575,13 +575,22 @@ def fetch_training_data(competition_code, seasons=None):
                 )
             for m in matches:
                 if m.get("status") == "FINISHED":
-                    all_matches.append({
+                    row = {
                         "home_team": m["homeTeam"]["name"],
                         "away_team": m["awayTeam"]["name"],
                         "home_goals": m["score"]["fullTime"]["home"],
                         "away_goals": m["score"]["fullTime"]["away"],
-                        "utc_date": m.get("utcDate")
-                    })
+                        "utc_date": m.get("utcDate"),
+                    }
+                    # Preserve betting odds when available (UK provider)
+                    odds = m.get("odds") or {}
+                    if odds.get("avgH"):
+                        row["avgH"] = odds["avgH"]
+                        row["avgD"] = odds["avgD"]
+                        row["avgA"] = odds["avgA"]
+                    if odds.get("over25"):
+                        row["over25"] = odds["over25"]
+                    all_matches.append(row)
         except Exception as exc:
             logger.exception(
                 "Failed to fetch training data for competition=%s season=%s error=%s",
@@ -986,7 +995,19 @@ def _update_elo_ratings(elo_ratings, home_team, away_team, home_goals, away_goal
     elo_ratings[away_team] = away_rating - delta
 
 
-def _build_feature_row(home_team, away_team, team_profiles, h2h_profiles, league_defaults, lookback, current_date, elo_ratings=None):
+def _safe_implied(odds_val):
+    """1/odds → implied probability (overround-removed). Returns 0 if missing."""
+    if odds_val is None:
+        return 0.0
+    try:
+        o = float(odds_val)
+        return 1.0 / o if o > 1.0 else 0.0
+    except (ValueError, TypeError, ZeroDivisionError):
+        return 0.0
+
+
+def _build_feature_row(home_team, away_team, team_profiles, h2h_profiles, league_defaults,
+                       lookback, current_date, elo_ratings=None, odds_row=None):
     home_profile = team_profiles.get(home_team, _new_team_profile())
     away_profile = team_profiles.get(away_team, _new_team_profile())
     elo_ratings = elo_ratings or {}
@@ -1050,6 +1071,18 @@ def _build_feature_row(home_team, away_team, team_profiles, h2h_profiles, league
         "elo_home_win_prob": _expected_home_result_from_elo(home_elo, away_elo),
         "home_advantage": league_defaults["home_goals"] - league_defaults["away_goals"],
     }
+    # ── Betting-odds features (closing market odds → implied probabilities) ──
+    # Non-zero only for UK leagues where odds CSV columns exist; zero for FD/LF.
+    odds = odds_row or {}
+    ih = _safe_implied(odds.get("avgH"))
+    id_ = _safe_implied(odds.get("avgD"))
+    ia = _safe_implied(odds.get("avgA"))
+    total = ih + id_ + ia
+    row["odds_home_implied"] = ih / total if total > 0 else 0.0
+    row["odds_draw_implied"] = id_ / total if total > 0 else 0.0
+    row["odds_away_implied"] = ia / total if total > 0 else 0.0
+    row["odds_over25_implied"] = _safe_implied(odds.get("over25"))
+    return row
 
 
 def _update_team_profile(profile, goals_for, goals_against, venue, match_date):
@@ -1131,6 +1164,10 @@ def build_training_features(df, lookback=8):
         "elo_gap",
         "elo_home_win_prob",
         "home_advantage",
+        "odds_home_implied",
+        "odds_draw_implied",
+        "odds_away_implied",
+        "odds_over25_implied",
     ]
     if df is None or df.empty:
         return pd.DataFrame(columns=expected_columns), pd.Series(dtype=float), pd.Series(dtype=float), {
@@ -1167,16 +1204,13 @@ def build_training_features(df, lookback=8):
         home = row["home_team"]
         away = row["away_team"]
         match_date = row.get("utc_date")
+        odds_row = {"avgH": row.get("avgH"), "avgD": row.get("avgD"),
+                     "avgA": row.get("avgA"), "over25": row.get("over25")}
         feature_rows.append(
             _build_feature_row(
-                home,
-                away,
-                team_profiles,
-                h2h_profiles,
-                league_defaults,
-                lookback,
-                match_date,
-                elo_ratings,
+                home, away, team_profiles, h2h_profiles, league_defaults,
+                lookback, match_date, elo_ratings,
+                odds_row=odds_row,
             )
         )
 

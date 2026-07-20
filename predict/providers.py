@@ -535,6 +535,16 @@ def _uk_iso(date_str, time_str=None):
     return f"{d.strftime('%Y-%m-%d')}T{hh.zfill(2)}:{mm.zfill(2)}:00Z"
 
 
+def _try_float(val):
+    """Safely parse a float from a CSV cell (may be empty string)."""
+    if val is None or str(val).strip() == "":
+        return None
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return None
+
+
 def _uk_row_to_match(row, fduk_code):
     home = row.get("HomeTeam") or row.get("Home")
     away = row.get("AwayTeam") or row.get("Away")
@@ -550,12 +560,27 @@ def _uk_row_to_match(row, fduk_code):
     except (ValueError, TypeError):
         finished = False
         hg = ag = None
+    # Extract betting odds (available in main-league CSVs)
+    odds = None
+    try:
+        avg_h = _try_float(row.get("AvgH"))
+        avg_d = _try_float(row.get("AvgD"))
+        avg_a = _try_float(row.get("AvgA"))
+        over25 = _try_float(row.get("Avg>2.5") or row.get("B365>2.5"))
+        if avg_h and avg_d and avg_a:
+            odds = {"avgH": avg_h, "avgD": avg_d, "avgA": avg_a}
+            if over25:
+                odds["over25"] = over25
+    except Exception:
+        odds = None
+
     return {
         "id": f"UK-{fduk_code}-{row.get('Date')}-{home}-{away}",
         "utcDate": _uk_iso(row.get("Date"), row.get("Time")),
         "status": "FINISHED" if finished else "TIMED",
         "homeTeam": {"name": str(home).strip(), "crest": None},
         "awayTeam": {"name": str(away).strip(), "crest": None},
+        "odds": odds,
         "score": {
             "fullTime": {"home": hg, "away": ag},
             "halfTime": {
