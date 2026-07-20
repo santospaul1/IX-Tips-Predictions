@@ -40,10 +40,8 @@ class Command(BaseCommand):
                     if MatchPrediction.objects.filter(match_id=match_id).exists():
                         continue
 
-                    predicted_result, home_goals, away_goals = predict_match_outcome(
-                        home_team,
-                        away_team,
-                        (model_home, model_away, model_context),
+                    predicted_result, home_goals, away_goals, _, _ = predict_match_outcome(
+                        home_team, away_team, (model_home, model_away, model_context),
                     )
 
                     MatchPrediction.objects.create(

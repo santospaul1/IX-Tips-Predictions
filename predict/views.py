@@ -551,10 +551,8 @@ def live_predictions_by_date(request):
                     match_id = match.get('id')
 
                     try:
-                        _, pred_home, pred_away = predict_match_outcome(
-                            home,
-                            away,
-                            (model_home, model_away, model_context),
+                        result_label, pred_home, pred_away, rate_h, rate_a = predict_match_outcome(
+                            home, away, (model_home, model_away, model_context),
                         )
 
                         result = actual_result_map.get((home, away))
@@ -570,8 +568,10 @@ def live_predictions_by_date(request):
                                 'competition': competition_code,
                                 'home_team': home,
                                 'away_team': away,
-                                'predicted_home_goals': int(round(pred_home)),
-                                'predicted_away_goals': int(round(pred_away)),
+                                'predicted_home_goals': pred_home,
+                                'predicted_away_goals': pred_away,
+                                'predicted_home_rate': rate_h,
+                                'predicted_away_rate': rate_a,
                             }
                         )
 
