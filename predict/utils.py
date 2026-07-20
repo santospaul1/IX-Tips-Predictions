@@ -129,6 +129,8 @@ def score_top_pick_markets(match_prediction, model_context):
     goal_balance_gap = float(features.get("goal_balance_gap", 0.0))
     h2h_goal_diff = float(features.get("h2h_goal_diff", 0.0))
     h2h_total_goals = float(features.get("h2h_total_goals", 2.4))
+    h2h_btts_rate = float(features.get("h2h_btts_rate", 0.5))
+    h2h_over25_rate = float(features.get("h2h_over25_rate", 0.5))
     home_recent_scored = float(features.get("home_recent_scored", 1.2))
     away_recent_scored = float(features.get("away_recent_scored", 1.0))
     home_recent_conceded = float(features.get("home_recent_conceded", 1.0))
@@ -152,11 +154,12 @@ def score_top_pick_markets(match_prediction, model_context):
         + 0.20 * max(0.0, 2.4 - h2h_total_goals)
     )
     both_score_signal = (
-        0.35 * min(home_recent_scored, away_recent_scored)
-        + 0.20 * (2.0 - home_clean_sheet_rate - away_clean_sheet_rate)
-        + 0.20 * (2.0 - home_fail_to_score_rate - away_fail_to_score_rate)
-        + 0.15 * min(total_goals, 3.5)
-        + 0.10 * min(h2h_total_goals, 3.5)
+        0.30 * min(home_recent_scored, away_recent_scored)
+        + 0.18 * (2.0 - home_clean_sheet_rate - away_clean_sheet_rate)
+        + 0.18 * (2.0 - home_fail_to_score_rate - away_fail_to_score_rate)
+        + 0.12 * min(total_goals, 3.5)
+        + 0.08 * min(h2h_total_goals, 3.5)
+        + 0.14 * (h2h_btts_rate * 2.0 - 1.0)  # 0.5→0, 0.8→+0.084, 1.0→+0.14
     )
     stronger_team_attack = max(
         (match_prediction.predicted_home_goals or 0),
@@ -209,6 +212,7 @@ def score_top_pick_markets(match_prediction, model_context):
             + 20 * max(0.0, goal_environment - 2.15)
             + 12 * max(0.0, both_score_signal - 1.35)
             - 10 * goal_suppression
+            + 12 * (h2h_over25_rate - 0.5) * 2.0  # 0.5→0, 0.8→+7.2, 1.0→+12
             + (14 if total_goals >= 3.0 else 0)
         ),
         "Under 2.5": _clip_score(
@@ -1084,12 +1088,15 @@ def _build_feature_row(home_team, away_team, team_profiles, h2h_profiles, league
         "elo_home_win_prob": _expected_home_result_from_elo(home_elo, away_elo),
         "home_advantage": league_defaults["home_goals"] - league_defaults["away_goals"],
     }
-    # ── League experience (promoted teams have 0 matches; veterans have 200+) ──
-    home_exp = max(0, len(home_profile.get("overall_points", [])))
-    away_exp = max(0, len(away_profile.get("overall_points", [])))
-    row["home_experience"] = float(home_exp)
-    row["away_experience"] = float(away_exp)
-    row["experience_gap"] = float(home_exp - away_exp)
+    # ── League experience (0.0 = promoted, 1.0 = 4+ seasons established) ──
+    # Capped and normalized so this feature is on the same 0-1 scale as other
+    # features — raw match counts (0-400) would dominate XGBoost otherwise.
+    _cap = 152.0  # ≈4 seasons × 38 games
+    home_exp = min(max(0, len(home_profile.get("overall_points", []))), _cap) / _cap
+    away_exp = min(max(0, len(away_profile.get("overall_points", []))), _cap) / _cap
+    row["home_experience"] = home_exp
+    row["away_experience"] = away_exp
+    row["experience_gap"] = home_exp - away_exp
 
     # ── Betting-odds features (closing market odds → implied probabilities) ──
     # Non-zero only for UK leagues where odds CSV columns exist; zero for FD/LF.
