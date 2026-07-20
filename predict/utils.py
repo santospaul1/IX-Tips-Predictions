@@ -1253,10 +1253,12 @@ def build_fixture_features(home_team, away_team, model_context):
 
 def train_models(X, y_home, y_away, sample_weight=None):
     """
-    Trains two regressors for home and away goals.
-    - X: DataFrame (may contain string team names or numeric columns)
-    - y_home, y_away: Series
-    Returns: (model_home, model_away, label_encoder_or_none)
+    Trains two Poisson XGBoost regressors for home and away goals.
+    Falls back to RandomForest if xgboost is not installed.
+
+    Goals are count data (0,1,2,...); XGBoost's 'count:poisson' objective
+    models the discrete Poisson distribution directly, unlike RandomForest
+    which regresses to the mean and destroys the count distribution.
     """
     label_encoder = None
     X_train = X.copy()
@@ -1289,21 +1291,43 @@ def train_models(X, y_home, y_away, sample_weight=None):
         ya_tr, ya_te = y_away.iloc[:split_index], y_away.iloc[split_index:]
         sw_tr = sample_weight[:split_index] if sample_weight is not None else None
 
-    model_home = RandomForestRegressor(
-        n_estimators=300,
-        random_state=42,
-        min_samples_leaf=2,
-        n_jobs=-1,
-    )
-    model_away = RandomForestRegressor(
-        n_estimators=300,
-        random_state=42,
-        min_samples_leaf=2,
-        n_jobs=-1,
-    )
-
-    model_home.fit(X_tr, yh_tr, sample_weight=sw_tr)
-    model_away.fit(X_tr, ya_tr, sample_weight=sw_tr)
+    # XGBoost with Poisson objective — models discrete count data correctly.
+    # Falls back to RandomForest if xgboost isn't available.
+    try:
+        import xgboost as xgb
+        model_home = xgb.XGBRegressor(
+            n_estimators=300,
+            objective="count:poisson",
+            max_depth=6,
+            learning_rate=0.05,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=42,
+            n_jobs=-1,
+        )
+        model_away = xgb.XGBRegressor(
+            n_estimators=300,
+            objective="count:poisson",
+            max_depth=6,
+            learning_rate=0.05,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=42,
+            n_jobs=-1,
+        )
+        model_home.fit(X_tr, yh_tr, sample_weight=sw_tr)
+        model_away.fit(X_tr, ya_tr, sample_weight=sw_tr)
+        kind = "XGBoost(count:poisson)"
+    except ImportError:
+        model_home = RandomForestRegressor(
+            n_estimators=300, random_state=42, min_samples_leaf=2, n_jobs=-1,
+        )
+        model_away = RandomForestRegressor(
+            n_estimators=300, random_state=42, min_samples_leaf=2, n_jobs=-1,
+        )
+        model_home.fit(X_tr, yh_tr, sample_weight=sw_tr)
+        model_away.fit(X_tr, ya_tr, sample_weight=sw_tr)
+        kind = "RandomForest(fallback)"
 
     # quick metrics (best-effort)
     try:
@@ -1312,7 +1336,7 @@ def train_models(X, y_home, y_away, sample_weight=None):
     except Exception:
         home_rmse = away_rmse = None
 
-    logger.info(f" Trained models; home_rmse={home_rmse}, away_rmse={away_rmse}")
+    logger.info(f" Trained models [{kind}]; home_rmse={home_rmse}, away_rmse={away_rmse}")
 
     return model_home, model_away, label_encoder
 
@@ -1425,16 +1449,30 @@ def get_or_train_model_bundle(competition_code, force_refresh=False):
 
 
 def _poisson_best_scoreline(home_rate, away_rate):
-    """Pick the single most-likely integer scoreline from Poisson(λh)×Poisson(λa)."""
+    """Pick an integer scoreline by weighted random sampling from the full
+    Poisson(λh)×Poisson(λa) distribution.  This produces the correct variety
+    across predictions — a 3-0 score with 5 % probability will appear ~5 %
+    of the time — instead of always picking the single most-likely outcome
+    (the mode), which collapses to 1-1/2-1 for typical football λ rates."""
     from math import exp, factorial as _fac
-    best, best_prob = (0, 0), -1.0
+    import random as _random
+    scores, weights = [], []
+    total = 0.0
     for h in range(0, 7):
         for a in range(0, 7):
             p = float(exp(-home_rate) * (home_rate ** h) / _fac(h)) * \
                 float(exp(-away_rate) * (away_rate ** a) / _fac(a))
-            if p > best_prob:
-                best_prob, best = p, (h, a)
-    return best  # (home_goals, away_goals)
+            scores.append((h, a))
+            weights.append(p)
+            total += p
+    # Normalize + weighted random pick
+    r = _random.random() * total
+    cumulative = 0.0
+    for (h, a), w in zip(scores, weights):
+        cumulative += w
+        if r <= cumulative:
+            return (h, a)
+    return scores[-1]  # fallback (should never reach here)
 
 
 def predict_match_outcome(home_team, away_team, models, label_encoder=None):
