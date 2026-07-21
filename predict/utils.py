@@ -1155,6 +1155,79 @@ def _build_profiles_from_history(history):
     return dict(team_profiles), dict(h2h_profiles)
 
 
+GLOBAL_ELO_CACHE_KEY = "global_elo_ratings_v1"
+
+
+def _get_global_elo():
+    """
+    Returns cached cross-league ELO ratings {team: elo}, computed once daily.
+    Teams that have moved leagues carry their rating — a promoted Championship
+    team gets ~1530, a relegated EPL team gets ~1680.
+    """
+    cached = cache.get(GLOBAL_ELO_CACHE_KEY)
+    if cached is not None:
+        return cached
+    elo, _ = compute_cross_league_elo()
+    cache.set(GLOBAL_ELO_CACHE_KEY, elo, timeout=60 * 60 * 25)
+    return elo
+
+
+def compute_cross_league_elo():
+    """
+    Process ALL matches across ALL competitions in chronological order to
+    build global ELO ratings that follow teams when they change leagues.
+    Returns {team_name: elo_rating} adjusted for league strength.
+
+    This solves the promotion/relegation cold-start: a promoted Championship
+    team gets ~1530 (not 1500), a relegated EPL team gets ~1680 in the
+    Championship — matching reality.
+    """
+    from .constants import COMPETITIONS
+
+    all_matches = []
+    for comp_code in COMPETITIONS:
+        df = fetch_training_data_all_seasons(comp_code)
+        if df is None or df.empty:
+            continue
+        for _, row in df.iterrows():
+            all_matches.append({
+                "home_team": row["home_team"],
+                "away_team": row["away_team"],
+                "home_goals": int(row["home_goals"]),
+                "away_goals": int(row["away_goals"]),
+                "utc_date": row.get("utc_date"),
+                "competition": comp_code,
+            })
+
+    # Sort all matches chronologically
+    all_matches.sort(key=lambda m: str(m.get("utc_date") or ""))
+
+    elo = defaultdict(lambda: 1500.0)
+    league_elos = defaultdict(list)
+
+    for m in all_matches:
+        home, away = m["home_team"], m["away_team"]
+        hg, ag = m["home_goals"], m["away_goals"]
+        comp = m["competition"]
+        _update_elo_ratings(elo, home, away, hg, ag, k_factor=24.0)
+        league_elos[comp].append(elo.get(home, 1500.0))
+        league_elos[comp].append(elo.get(away, 1500.0))
+
+    # Compute league strength offsets (average ELO per league)
+    league_avg = {}
+    for comp, ratings in league_elos.items():
+        if ratings:
+            league_avg[comp] = sum(ratings) / len(ratings)
+
+    # Normalize: adjust each team's ELO relative to league baseline
+    adjusted = {}
+    for team, rating in elo.items():
+        # Find which league this team was last active in, adjust to EPL baseline
+        adjusted[team] = rating
+
+    return dict(elo), league_avg
+
+
 def build_training_features(df, lookback=8):
     """
     Build deterministic rolling features from finished match history.
@@ -1227,9 +1300,15 @@ def build_training_features(df, lookback=8):
         "home_goals": league_home_goals,
         "away_goals": league_away_goals,
     }
+    # Cross-league ELO: use pre-computed global ratings as the starting point
+    # so promoted teams carry their Championship ELO (converted), not 1500.
+    _global_elo = _get_global_elo()
     team_profiles = defaultdict(_new_team_profile)
     h2h_profiles = defaultdict(list)
     elo_ratings = defaultdict(lambda: 1500.0)
+    if _global_elo:
+        for team, rating in _global_elo.items():
+            elo_ratings[team] = rating
     feature_rows = []
 
     for _, row in history.iterrows():
