@@ -2367,6 +2367,26 @@ def update_actuals_for_top_picks(picks_qs):
 
 # ---------- standings & metadata ----------
 
+def _is_stale_season_table(table):
+    """Return True if the table looks like a completed previous season —
+    all teams have played a full schedule and the current season hasn't started."""
+    if not table:
+        return False
+    try:
+        played = [int(row.get("playedGames", 0)) for row in table]
+        max_played = max(played) if played else 0
+        # All teams at the same max games = completed season
+        if max_played >= 30 and all(p == max_played for p in played):
+            from datetime import date
+            month = date.today().month
+            # Off-season: June through mid-August
+            if month in (6, 7):
+                return True
+    except (ValueError, TypeError):
+        pass
+    return False
+
+
 def get_league_table(competition):
     """
     Returns standings (cached). Uses football-data's /standings endpoint.
@@ -2383,6 +2403,13 @@ def get_league_table(competition):
         table = af_fetch_standings(competition)
     else:
         table = dispatch_provider(competition, "fetch_standings")
+    # If the returned table is from a completed season (all teams at max
+    # games played) and we're in the off-season, return empty so the UI
+    # shows the new season table (0 games) instead of last year's final.
+    if table and _is_stale_season_table(table):
+        cache.set(cache_key, [], timeout=60 * 60 * 6)
+        return []
+
     cache.set(cache_key, table, timeout=60 * 60 * 6)
     return table
 

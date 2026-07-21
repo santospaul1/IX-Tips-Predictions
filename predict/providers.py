@@ -758,9 +758,21 @@ def fd_fetch_matches_by_season(competition_code, season_year):
 def fd_fetch_standings(competition_code):
     data = _fd_get(f"competitions/{competition_code}/standings")
     try:
-        return data.get("standings", [])[0].get("table", [])
+        table = data.get("standings", [])[0].get("table", [])
     except (IndexError, KeyError, TypeError):
         return []
+
+    # Off-season: return empty table instead of last season's final standings
+    if table:
+        try:
+            played = [int(r.get("playedGames", 0)) for r in table]
+            max_p = max(played) if played else 0
+            from datetime import date
+            if max_p >= 30 and all(p == max_p for p in played) and date.today().month in (6, 7):
+                return []
+        except (ValueError, TypeError):
+            pass
+    return table
 
 
 @_register(providers=["FD"], operation="fetch_teams")
