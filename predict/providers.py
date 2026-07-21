@@ -764,7 +764,11 @@ def fd_fetch_matches_by_season(competition_code, season_year):
 
 @_register(providers=["FD"], operation="fetch_standings")
 def fd_fetch_standings(competition_code):
-    data = _fd_get(f"competitions/{competition_code}/standings")
+    from datetime import date
+    t = date.today()
+    season = t.year if t.month >= 7 else t.year - 1
+    data = _fd_get(f"competitions/{competition_code}/standings",
+                   params={"season": season})
     try:
         return data.get("standings", [])[0].get("table", [])
     except (IndexError, KeyError, TypeError):
