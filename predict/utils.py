@@ -1340,7 +1340,8 @@ def build_training_features(df, lookback=8):
 
         _update_team_profile(team_profiles[home], home_goals, away_goals, "home", match_date)
         _update_team_profile(team_profiles[away], away_goals, home_goals, "away", match_date)
-        _update_elo_ratings(elo_ratings, home, away, home_goals, away_goals)
+        _update_elo_ratings(elo_ratings, home, away, home_goals, away_goals,
+                           k_factor=32.0)
         h2h_profiles[tuple(sorted((home, away)))].append({
             "home_team": home,
             "away_team": away,
