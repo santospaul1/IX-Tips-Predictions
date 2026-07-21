@@ -671,8 +671,16 @@ def uk_fetch_matches_by_season(competition_code, season_year):
 
 @_register(providers=["UK"], operation="fetch_standings")
 def uk_fetch_standings(competition_code):
-    """Compute standings from the UK current-season finished matches."""
-    finished = [m for m in _uk_current_matches(competition_code) if m["status"] == "FINISHED"]
+    """Compute standings from ONLY the current season's finished matches."""
+    mapping = FOOTBALL_DATA_UK_CODES.get(competition_code)
+    if not mapping:
+        return []
+    _, fduk_code = mapping
+    from datetime import date
+    t = date.today()
+    season = t.year if t.month >= 7 else t.year - 1
+    matches = _uk_main_season(fduk_code, season)
+    finished = [m for m in matches if m["status"] == "FINISHED"]
     return _compute_standings_table(finished)
 
 
