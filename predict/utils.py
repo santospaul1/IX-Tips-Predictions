@@ -125,8 +125,8 @@ def score_top_pick_markets(match_prediction, model_context):
     ).iloc[0]
 
     elo_home_prob = float(features.get("elo_home_win_prob", 0.5))
-    form_gap = float(features.get("form_gap", 0.0))
-    goal_balance_gap = float(features.get("goal_balance_gap", 0.0))
+    form_gap = float(features.get("home_form", 1.5)) - float(features.get("away_form", 1.1))
+    goal_balance_gap = float(features.get("home_goal_diff_form", 0.3)) - float(features.get("away_goal_diff_form", -0.3))
     h2h_goal_diff = float(features.get("h2h_goal_diff", 0.0))
     h2h_total_goals = float(features.get("h2h_total_goals", 2.4))
     h2h_btts_rate = float(features.get("h2h_btts_rate", 0.5))
@@ -139,7 +139,7 @@ def score_top_pick_markets(match_prediction, model_context):
     away_clean_sheet_rate = float(features.get("away_clean_sheet_rate", 0.25))
     home_fail_to_score_rate = float(features.get("home_fail_to_score_rate", 0.2))
     away_fail_to_score_rate = float(features.get("away_fail_to_score_rate", 0.2))
-    rest_gap = float(features.get("rest_gap", 0.0))
+    rest_gap = float(features.get("home_rest_days", 7.0)) - float(features.get("away_rest_days", 7.0))
     h2h_match_count = float(features.get("h2h_match_count", 0.0))
 
     goal_environment = (
@@ -325,7 +325,7 @@ def explain_pick_reasons(market, features, match_prediction):
     total_goals = float((match_prediction.predicted_home_goals or 0) + (match_prediction.predicted_away_goals or 0))
     goal_margin = float((match_prediction.predicted_home_goals or 0) - (match_prediction.predicted_away_goals or 0))
     elo_gap = float(features.get("elo_gap", 0.0))
-    form_gap = float(features.get("form_gap", 0.0))
+    form_gap = float(features.get("home_form", 1.5)) - float(features.get("away_form", 1.1))
     h2h_total_goals = float(features.get("h2h_total_goals", 2.4))
     home_clean_sheet_rate = float(features.get("home_clean_sheet_rate", 0.25))
     away_clean_sheet_rate = float(features.get("away_clean_sheet_rate", 0.25))
@@ -1071,11 +1071,6 @@ def _build_feature_row(home_team, away_team, team_profiles, h2h_profiles, league
         "away_rest_days": away_summary["rest_days"],
         "home_strength": home_summary["recent_scored"] + away_summary["recent_conceded"],
         "away_strength": away_summary["recent_scored"] + home_summary["recent_conceded"],
-        "form_gap": home_summary["form"] - away_summary["form"],
-        "goal_balance_gap": home_summary["goal_diff_form"] - away_summary["goal_diff_form"],
-        "venue_attack_gap": home_summary["recent_scored"] - away_summary["recent_scored"],
-        "venue_defense_gap": away_summary["recent_conceded"] - home_summary["recent_conceded"],
-        "rest_gap": home_summary["rest_days"] - away_summary["rest_days"],
         "h2h_home_points": h2h_summary["home_points"],
         "h2h_goal_diff": h2h_summary["goal_diff"],
         "h2h_total_goals": h2h_summary["total_goals"],
@@ -1096,7 +1091,6 @@ def _build_feature_row(home_team, away_team, team_profiles, h2h_profiles, league
     away_exp = min(max(0, len(away_profile.get("overall_points", []))), _cap) / _cap
     row["home_experience"] = home_exp
     row["away_experience"] = away_exp
-    row["experience_gap"] = home_exp - away_exp
 
     # ── Betting-odds features (closing market odds → implied probabilities) ──
     # Non-zero only for UK leagues where odds CSV columns exist; zero for FD/LF.
@@ -1256,11 +1250,6 @@ def build_training_features(df, lookback=8):
         "away_fail_to_score_rate",
         "home_rest_days",
         "away_rest_days",
-        "form_gap",
-        "goal_balance_gap",
-        "venue_attack_gap",
-        "venue_defense_gap",
-        "rest_gap",
         "h2h_home_points",
         "h2h_goal_diff",
         "h2h_total_goals",
@@ -1274,7 +1263,6 @@ def build_training_features(df, lookback=8):
         "home_advantage",
         "home_experience",
         "away_experience",
-        "experience_gap",
         "odds_home_implied",
         "odds_draw_implied",
         "odds_away_implied",
