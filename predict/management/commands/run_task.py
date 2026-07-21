@@ -99,6 +99,16 @@ class Command(BaseCommand):
         Sequential replacement for the old Celery staggered scheduler.
         Runs one competition at a time to keep peak memory low.
         """
+        # Pre-compute cross-league ELO once before the competition loop so the
+        # first competition doesn't block while computing it (cold training-data
+        # caches would cause 30+ min of API fetches inside the first prediction).
+        try:
+            from predict.utils import _get_global_elo
+            gelo = _get_global_elo()
+            self.stdout.write(f"[run_task] global ELO ready: {len(gelo)} teams")
+        except Exception as e:
+            self.stderr.write(f"[run_task] global ELO skipped: {e}")
+
         for comp in COMPETITIONS:
             self.stdout.write(f"[run_task] predicting {comp}")
             try:

@@ -1167,9 +1167,15 @@ def _get_global_elo():
     cached = cache.get(GLOBAL_ELO_CACHE_KEY)
     if cached is not None:
         return cached
-    elo, _ = compute_cross_league_elo()
-    cache.set(GLOBAL_ELO_CACHE_KEY, elo, timeout=60 * 60 * 25)
-    return elo
+    try:
+        elo, _ = compute_cross_league_elo()
+        if elo:
+            cache.set(GLOBAL_ELO_CACHE_KEY, elo, timeout=60 * 60 * 25)
+            logger.info("Global ELO computed: %d teams across leagues", len(elo))
+        return elo
+    except Exception as e:
+        logger.warning("Failed to compute global ELO: %s", e)
+        return {}
 
 
 def compute_cross_league_elo():
@@ -1302,7 +1308,11 @@ def build_training_features(df, lookback=8):
     }
     # Cross-league ELO: use pre-computed global ratings as the starting point
     # so promoted teams carry their Championship ELO (converted), not 1500.
-    _global_elo = _get_global_elo()
+    _global_elo = {}
+    try:
+        _global_elo = _get_global_elo()
+    except Exception as e:
+        logger.warning("Global ELO unavailable, using per-league defaults: %s", e)
     team_profiles = defaultdict(_new_team_profile)
     h2h_profiles = defaultdict(list)
     elo_ratings = defaultdict(lambda: 1500.0)
