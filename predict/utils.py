@@ -1022,8 +1022,7 @@ def _safe_implied(odds_val):
 
 
 def _build_feature_row(home_team, away_team, team_profiles, h2h_profiles, league_defaults,
-                       lookback, current_date, elo_ratings=None, odds_row=None,
-                       global_last_dates=None):
+                       lookback, current_date, elo_ratings=None, odds_row=None):
     home_profile = team_profiles.get(home_team, _new_team_profile())
     away_profile = team_profiles.get(away_team, _new_team_profile())
     elo_ratings = elo_ratings or {}
@@ -1089,19 +1088,6 @@ def _build_feature_row(home_team, away_team, team_profiles, h2h_profiles, league
         "elo_home_win_prob": _expected_home_result_from_elo(home_elo, away_elo),
         "home_advantage": league_defaults["home_goals"] - league_defaults["away_goals"],
     }
-    # ── Cross-competition rest days ──────────────────────────────────────
-    # Override competition-specific last-match dates with cross-league ones so
-    # a midweek CL fixture before a weekend EPL match is correctly detected as
-    # 3 rest days (not the default 7).
-    if global_last_dates:
-        home_global = global_last_dates.get(home_team)
-        away_global = global_last_dates.get(away_team)
-        if home_global:
-            row["home_rest_days"] = _rest_days(home_global, current_date)
-        if away_global:
-            row["away_rest_days"] = _rest_days(away_global, current_date)
-        row["rest_gap"] = row["home_rest_days"] - row["away_rest_days"]
-
     # ── League experience (0.0 = promoted, 1.0 = 4+ seasons established) ──
     # Capped and normalized so this feature is on the same 0-1 scale as other
     # features — raw match counts (0-400) would dominate XGBoost otherwise.
@@ -1111,23 +1097,6 @@ def _build_feature_row(home_team, away_team, team_profiles, h2h_profiles, league
     row["home_experience"] = home_exp
     row["away_experience"] = away_exp
     row["experience_gap"] = home_exp - away_exp
-
-    # ── Promoted-team ELO penalty ──────────────────────────────────────────
-    # Teams with < 1 season in this league get a downward ELO adjustment in
-    # the feature row. This bridges the gap between the global ELO (which
-    # converges slowly — ~70 pts EPL→Champ) and reality (promoted teams
-    # average ~1.0 PPG in EPL, equivalent to ~120 pt gap).
-    _gap = 120.0  # ELO-point penalty for 0-experience teams
-    if home_exp < 0.25:
-        penalty = _gap * (1.0 - home_exp / 0.25)
-        row["home_elo"] -= penalty
-        row["elo_gap"] -= penalty
-        row["elo_home_win_prob"] = _expected_home_result_from_elo(row["home_elo"], row["away_elo"])
-    if away_exp < 0.25:
-        penalty = _gap * (1.0 - away_exp / 0.25)
-        row["away_elo"] -= penalty
-        row["elo_gap"] += penalty
-        row["elo_home_win_prob"] = _expected_home_result_from_elo(row["home_elo"], row["away_elo"])
 
     # ── Betting-odds features (closing market odds → implied probabilities) ──
     # Non-zero only for UK leagues where odds CSV columns exist; zero for FD/LF.
@@ -1189,30 +1158,24 @@ def _build_profiles_from_history(history):
 GLOBAL_ELO_CACHE_KEY = "global_elo_ratings_v1"
 
 
-GLOBAL_LAST_MATCH_KEY = "global_last_match_dates_v1"
-
-
 def _get_global_elo():
     """
-    Returns (elo_dict, last_match_dict) cached cross-league data, computed
-    once daily.  last_match tracks the most recent match date per team across
-    ALL competitions — used for accurate rest-day calculation when a team
-    played midweek in a different competition.
+    Returns cached cross-league ELO ratings {team: elo}, computed once daily.
+    Teams that have moved leagues carry their rating — a promoted Championship
+    team gets ~1530, a relegated EPL team gets ~1680.
     """
-    cached_elo = cache.get(GLOBAL_ELO_CACHE_KEY)
-    cached_dates = cache.get(GLOBAL_LAST_MATCH_KEY)
-    if cached_elo is not None and cached_dates is not None:
-        return cached_elo, cached_dates
+    cached = cache.get(GLOBAL_ELO_CACHE_KEY)
+    if cached is not None:
+        return cached
     try:
-        elo, _, last_match = compute_cross_league_elo()
+        elo, _ = compute_cross_league_elo()
         if elo:
             cache.set(GLOBAL_ELO_CACHE_KEY, elo, timeout=60 * 60 * 25)
-            cache.set(GLOBAL_LAST_MATCH_KEY, last_match, timeout=60 * 60 * 25)
-            logger.info("Global ELO + last-match dates computed: %d teams", len(elo))
-        return elo, last_match
+            logger.info("Global ELO computed: %d teams across leagues", len(elo))
+        return elo
     except Exception as e:
         logger.warning("Failed to compute global ELO: %s", e)
-        return {}, {}
+        return {}
 
 
 def compute_cross_league_elo():
@@ -1247,7 +1210,6 @@ def compute_cross_league_elo():
 
     elo = defaultdict(lambda: 1500.0)
     league_elos = defaultdict(list)
-    team_last_match = {}  # cross-competition last match date per team
 
     for m in all_matches:
         home, away = m["home_team"], m["away_team"]
@@ -1256,11 +1218,6 @@ def compute_cross_league_elo():
         _update_elo_ratings(elo, home, away, hg, ag, k_factor=24.0)
         league_elos[comp].append(elo.get(home, 1500.0))
         league_elos[comp].append(elo.get(away, 1500.0))
-        # Track cross-league last match date for rest-day calculation
-        match_date = m.get("utc_date")
-        if match_date:
-            team_last_match[home] = match_date
-            team_last_match[away] = match_date
 
     # Compute league strength offsets (average ELO per league)
     league_avg = {}
@@ -1268,10 +1225,16 @@ def compute_cross_league_elo():
         if ratings:
             league_avg[comp] = sum(ratings) / len(ratings)
 
-    return dict(elo), league_avg, team_last_match
+    # Normalize: adjust each team's ELO relative to league baseline
+    adjusted = {}
+    for team, rating in elo.items():
+        # Find which league this team was last active in, adjust to EPL baseline
+        adjusted[team] = rating
+
+    return dict(elo), league_avg
 
 
-def build_training_features(df, lookback=8, global_last_dates=None):
+def build_training_features(df, lookback=8):
     """
     Build deterministic rolling features from finished match history.
     This avoids direct team-ID memorization and reduces skew against unseen teams.
@@ -1343,14 +1306,11 @@ def build_training_features(df, lookback=8, global_last_dates=None):
         "home_goals": league_home_goals,
         "away_goals": league_away_goals,
     }
-    # Cross-league ELO + last-match dates: promoted teams carry their
-    # Championship rating; rest days account for midweek fixtures in other comps.
+    # Cross-league ELO: use pre-computed global ratings as the starting point
+    # so promoted teams carry their Championship ELO (converted), not 1500.
     _global_elo = {}
-    global_last_dates = None
     try:
-        _global_elo, _global_dates = _get_global_elo()
-        if _global_dates:
-            global_last_dates = _global_dates
+        _global_elo = _get_global_elo()
     except Exception as e:
         logger.warning("Global ELO unavailable, using per-league defaults: %s", e)
     team_profiles = defaultdict(_new_team_profile)
@@ -1371,7 +1331,7 @@ def build_training_features(df, lookback=8, global_last_dates=None):
             _build_feature_row(
                 home, away, team_profiles, h2h_profiles, league_defaults,
                 lookback, match_date, elo_ratings,
-                odds_row=odds_row, global_last_dates=global_last_dates,
+                odds_row=odds_row,
             )
         )
 
