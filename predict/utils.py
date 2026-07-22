@@ -1763,6 +1763,25 @@ def predict_match_outcome(home_team, away_team, models, label_encoder=None):
     # int(round(x)) never produces 0 when the regression always outputs ≥ 0.6.
     raw_h = float(np.clip(ph, 0.1, 6))
     raw_a = float(np.clip(pa, 0.1, 6))
+
+    # ── ELO blend ────────────────────────────────────────────────────────
+    # When XGBoost disagrees strongly with ELO (e.g. Monza predicted to score
+    # 2.3 away at Inter), blend in the ELO-based goal expectation. The blend
+    # weight increases with |elo_gap| — a 300+ ELO gap means 70% weight to
+    # the ELO prior, preventing absurd upsets like Hull beating Man Utd.
+    if isinstance(model_extra, dict):
+        elo_h = float(model_extra.get("elo_ratings", {}).get(home_team, 1500))
+        elo_a = float(model_extra.get("elo_ratings", {}).get(away_team, 1500))
+        elo_diff = elo_h - elo_a
+        league_hg = float(model_extra.get("league_home_goals", 1.4))
+        league_ag = float(model_extra.get("league_away_goals", 1.1))
+        elo_exp_h = max(0.3, league_hg + elo_diff * 0.0035)
+        elo_exp_a = max(0.3, league_ag - elo_diff * 0.0035)
+        # Blend weight: 0% at 50 gap, 70% at 300 gap
+        w = min(0.7, max(0.0, (abs(elo_diff) - 50) / 400))
+        raw_h = raw_h * (1 - w) + elo_exp_h * w
+        raw_a = raw_a * (1 - w) + elo_exp_a * w
+
     seed = hash((home_team, away_team)) & 0xFFFFFFFF
     disp_h, disp_a = _poisson_best_scoreline(raw_h, raw_a, seed=seed)
 
