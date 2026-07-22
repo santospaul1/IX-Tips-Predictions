@@ -18,9 +18,19 @@
 
   <div class="table-data">
     <div class="order table-card">
-      <div class="admin-card-head">
-        <h3><i class='bx bx-trending-up' style="color:#8b5cf6; margin-right:6px;"></i>All Teams by ELO</h3>
-        <span style="font-size:0.72rem; color:var(--text-secondary);">{{ elo_all|length }} teams</span>
+      <div class="admin-card-head" style="flex-wrap:wrap; gap:8px;">
+        <h3><i class='bx bx-trending-up' style="color:#8b5cf6; margin-right:6px;"></i>
+          {% if selected_comp %}{{ selected_comp }}{% else %}All Teams{% endif %} by ELO
+        </h3>
+        <form method="GET" style="display:flex; gap:6px; align-items:center;">
+          <select name="competition" class="admin-form-input" style="width:220px;" onchange="this.form.submit()">
+            <option value="">All Leagues</option>
+            {% for code, name in competitions.items %}
+            <option value="{{ code }}" {% if selected_comp == code %}selected{% endif %}>{{ name }}</option>
+            {% endfor %}
+          </select>
+          <span style="font-size:0.72rem; color:var(--text-secondary);">{{ elo_all|length }} teams</span>
+        </form>
       </div>
 
       {% if elo_error %}

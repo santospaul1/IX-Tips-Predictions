@@ -1510,23 +1510,42 @@ def admin_task_dashboard(request):
 
 
 def elo_rankings(request):
-    """Standalone ELO rankings page."""
+    """ELO rankings page with optional per-league filter."""
+    comp_filter = request.GET.get("competition", "")
     elo_all = []
     elo_error = None
-    try:
-        from predict.utils import _get_global_elo
-        global_elo = _get_global_elo()
-        if global_elo:
-            elo_all = sorted(global_elo.items(), key=lambda x: -x[1])
-    except Exception as e:
-        elo_error = str(e)
+
+    if comp_filter:
+        # Per-competition ELO from the model context
+        try:
+            from predict.utils import get_or_train_model_bundle
+            bundle = get_or_train_model_bundle(comp_filter)
+            if bundle:
+                comp_elos = bundle[2].get("elo_ratings", {})
+                if comp_elos:
+                    elo_all = sorted(comp_elos.items(), key=lambda x: -x[1])
+            if not elo_all:
+                elo_error = f"No ELO data for {comp_filter} — train the model first."
+        except Exception as e:
+            elo_error = str(e)
+    else:
+        # Global cross-league ELO (cached, fast)
+        try:
+            from predict.utils import _get_global_elo
+            global_elo = _get_global_elo()
+            if global_elo:
+                elo_all = sorted(global_elo.items(), key=lambda x: -x[1])
+        except Exception as e:
+            elo_error = str(e)
 
     if not elo_all and not elo_error:
-        elo_error = "ELO not yet computed — run predictions first to populate global ratings."
+        elo_error = "ELO not yet computed — run predictions first."
 
     return render(request, "predict/elo_rankings.html", {
         "elo_all": elo_all,
         "elo_error": elo_error,
+        "competitions": COMPETITIONS,
+        "selected_comp": comp_filter,
     })
 
 
