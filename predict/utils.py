@@ -1118,6 +1118,23 @@ def _build_feature_row(home_team, away_team, team_profiles, h2h_profiles, league
     row["away_experience"] = away_exp
     row["experience_gap"] = home_exp - away_exp
 
+    # ── Form-momentum modifier ──────────────────────────────────────────
+    # Sprint form (last 3) that differs significantly from season form (20)
+    # signals momentum — a team on a 5-match losing streak should have their
+    # scoring rate pulled down, even if raw stats look ok from the full window.
+    _sprint_delta_h = home_sprint["form"] - home_season["form"]
+    _sprint_delta_a = away_sprint["form"] - away_season["form"]
+    _momentum_h = 1.0 + _sprint_delta_h / 3.0  # +0.33 per extra point in sprint
+    _momentum_a = 1.0 + _sprint_delta_a / 3.0
+    _momentum_h = max(0.7, min(1.3, _momentum_h))
+    _momentum_a = max(0.7, min(1.3, _momentum_a))
+    row["home_recent_scored"] *= _momentum_h
+    row["away_recent_scored"] *= _momentum_a
+    row["home_scored_sprint"] *= _momentum_h
+    row["away_scored_sprint"] *= _momentum_a
+    row["home_strength"] = row["home_recent_scored"] + row["away_recent_conceded"]
+    row["away_strength"] = row["away_recent_scored"] + row["home_recent_conceded"]
+
     # ── League-transition adjustment ─────────────────────────────────────
     # Teams with 0 matches in this league have stats from a DIFFERENT league
     # (promoted or relegated). Scale them based on the ELO gap between this
