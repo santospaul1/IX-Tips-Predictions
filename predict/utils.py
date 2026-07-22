@@ -1046,6 +1046,16 @@ def _build_feature_row(home_team, away_team, team_profiles, h2h_profiles, league
         points_default=1.1,
         current_date=current_date,
     )
+    # Multi-window: sprint (3 matches = momentum) and season (20 matches = baseline)
+    home_sprint = _summarize_profile(home_profile, "home", 3,
+        league_defaults["home_goals"], league_defaults["away_goals"], 1.5, current_date)
+    away_sprint = _summarize_profile(away_profile, "away", 3,
+        league_defaults["away_goals"], league_defaults["home_goals"], 1.1, current_date)
+    home_season = _summarize_profile(home_profile, "home", 20,
+        league_defaults["home_goals"], league_defaults["away_goals"], 1.5, current_date)
+    away_season = _summarize_profile(away_profile, "away", 20,
+        league_defaults["away_goals"], league_defaults["home_goals"], 1.1, current_date)
+
     h2h_summary = _summarize_head_to_head(
         home_team,
         away_team,
@@ -1061,8 +1071,14 @@ def _build_feature_row(home_team, away_team, team_profiles, h2h_profiles, league
         "away_recent_conceded": away_summary["recent_conceded"],
         "home_form": home_summary["form"],
         "away_form": away_summary["form"],
+        "home_form_sprint": home_sprint["form"],
+        "away_form_sprint": away_sprint["form"],
+        "home_form_season": home_season["form"],
+        "away_form_season": away_season["form"],
         "home_goal_diff_form": home_summary["goal_diff_form"],
         "away_goal_diff_form": away_summary["goal_diff_form"],
+        "home_scored_sprint": home_sprint["recent_scored"],
+        "away_scored_sprint": away_sprint["recent_scored"],
         "home_clean_sheet_rate": home_summary["clean_sheet_rate"],
         "away_clean_sheet_rate": away_summary["clean_sheet_rate"],
         "home_fail_to_score_rate": home_summary["fail_to_score_rate"],
@@ -1086,6 +1102,10 @@ def _build_feature_row(home_team, away_team, team_profiles, h2h_profiles, league
         "away_elo": away_elo,
         "elo_gap": home_elo - away_elo,
         "elo_home_win_prob": _expected_home_result_from_elo(home_elo, away_elo),
+        # ELO-derived goal expectations — gives the model a concrete prior based
+        # on team strength. ~100 ELO → +0.35 expected goals.
+        "elo_goal_exp_home": max(0.3, league_defaults["home_goals"] + (home_elo - away_elo) * 0.0035),
+        "elo_goal_exp_away": max(0.3, league_defaults["away_goals"] + (away_elo - home_elo) * 0.0035),
         "home_advantage": league_defaults["home_goals"] - league_defaults["away_goals"],
     }
     # ── League experience (0.0 = promoted, 1.0 = 4+ seasons established) ──
@@ -1248,8 +1268,14 @@ def build_training_features(df, lookback=8):
         "away_strength",
         "home_form",
         "away_form",
+        "home_form_sprint",
+        "away_form_sprint",
+        "home_form_season",
+        "away_form_season",
         "home_goal_diff_form",
         "away_goal_diff_form",
+        "home_scored_sprint",
+        "away_scored_sprint",
         "home_clean_sheet_rate",
         "away_clean_sheet_rate",
         "home_fail_to_score_rate",
@@ -1271,6 +1297,8 @@ def build_training_features(df, lookback=8):
         "away_elo",
         "elo_gap",
         "elo_home_win_prob",
+        "elo_goal_exp_home",
+        "elo_goal_exp_away",
         "home_advantage",
         "home_experience",
         "away_experience",
