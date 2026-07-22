@@ -953,13 +953,16 @@ def _summarize_profile(profile, venue, lookback, scored_default, conceded_defaul
 def _summarize_head_to_head(home_team, away_team, h2h_matches, lookback, default_total_goals):
     recent_matches = h2h_matches[-lookback:]
     if not recent_matches:
+        # All zeros = "no H2H data" signal — XGBoost learns to ignore these
+        # features when match_count=0. The old defaults (1.35 pts, 2.5 goals)
+        # biased predictions toward the home team when H2H was absent.
         return {
-            "home_points": 1.35,
+            "home_points": 0.0,
             "goal_diff": 0.0,
-            "total_goals": float(default_total_goals),
+            "total_goals": 0.0,
             "match_count": 0.0,
-            "btts_rate": 0.5,   # neutral default
-            "over25_rate": 0.5,
+            "btts_rate": 0.0,
+            "over25_rate": 0.0,
         }
 
     home_points = []
