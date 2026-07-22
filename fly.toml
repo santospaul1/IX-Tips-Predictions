@@ -6,7 +6,7 @@ console_command = '/code/manage.py shell'
   dockerfile = "Dockerfile"
 
 [deploy]
-  release_command = 'python manage.py collectstatic --noinput; python manage.py migrate --noinput; python manage.py createcachetable'
+  release_command = '/code/scripts/release.sh'
 
 [env]
   TZ = 'Africa/Nairobi'
