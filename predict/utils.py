@@ -1118,6 +1118,36 @@ def _build_feature_row(home_team, away_team, team_profiles, h2h_profiles, league
     row["away_experience"] = away_exp
     row["experience_gap"] = home_exp - away_exp
 
+    # ── League-transition adjustment ─────────────────────────────────────
+    # Promoted teams' Championship stats are inflated relative to EPL (scoring
+    # against weaker defenses). Scale them while they have < 10 matches in this
+    # league. The ELO goal expectations (above) already handle the prior — this
+    # fixes the form stats that were showing Hull at 1.61 scored vs EPL defenses.
+    _ADJ_DOWN = 0.78
+    _ADJ_UP = 1.28
+    if home_exp < 0.26:
+        if home_elo < 1520:  # promoted
+            row["home_recent_scored"] *= _ADJ_DOWN
+            row["home_recent_conceded"] *= _ADJ_UP
+            row["home_scored_sprint"] *= _ADJ_DOWN
+            row["home_strength"] = row["home_recent_scored"] + row["away_recent_conceded"]
+        elif home_elo > 1580:  # relegated
+            row["home_recent_scored"] *= _ADJ_UP
+            row["home_recent_conceded"] *= _ADJ_DOWN
+            row["home_scored_sprint"] *= _ADJ_UP
+            row["home_strength"] = row["home_recent_scored"] + row["away_recent_conceded"]
+    if away_exp < 0.26:
+        if away_elo < 1520:  # promoted
+            row["away_recent_scored"] *= _ADJ_DOWN
+            row["away_recent_conceded"] *= _ADJ_UP
+            row["away_scored_sprint"] *= _ADJ_DOWN
+            row["away_strength"] = row["away_recent_scored"] + row["home_recent_conceded"]
+        elif away_elo > 1580:  # relegated
+            row["away_recent_scored"] *= _ADJ_UP
+            row["away_recent_conceded"] *= _ADJ_DOWN
+            row["away_scored_sprint"] *= _ADJ_UP
+            row["away_strength"] = row["away_recent_scored"] + row["home_recent_conceded"]
+
     # ── Betting-odds features (closing market odds → implied probabilities) ──
     # Non-zero only for UK leagues where odds CSV columns exist; zero for FD/LF.
     odds = odds_row or {}
