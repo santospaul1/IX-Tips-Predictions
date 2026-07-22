@@ -141,6 +141,45 @@
       </div>
     </div>
 
+    <!-- ── Team ELO Ratings ── -->
+    {% if elo_data %}
+    <div class="order table-card">
+      <div class="admin-card-head">
+        <h3><i class='bx bx-trending-up' style="color:#8b5cf6; margin-right:6px;"></i>Team ELO Ratings</h3>
+        <span style="font-size:0.72rem; color:var(--text-secondary);">{{ elo_data|length }} competition{{ elo_data|length|pluralize }}</span>
+      </div>
+      {% for comp, teams in elo_data.items %}
+      {% if teams %}
+      <details style="margin-bottom:8px;" {% if forloop.first %}open{% endif %}>
+        <summary style="cursor:pointer; padding:8px 12px; font-weight:600; background:var(--bg-secondary); border-radius:6px;">
+          {{ comp }} — Top {{ teams|length }}
+        </summary>
+        <div class="table-scroll" style="margin-top:6px;">
+          <table class="dashboard-table">
+            <thead>
+              <tr><th>#</th><th>Team</th><th>ELO</th></tr>
+            </thead>
+            <tbody>
+              {% for team, elo in teams %}
+              <tr>
+                <td style="width:32px; color:var(--text-secondary);">{{ forloop.counter }}</td>
+                <td class="cell-strong">{{ team }}</td>
+                <td>
+                  <span style="font-weight:700; {% if elo > 1600 %}color:#10b981{% elif elo < 1400 %}color:#ef4444{% else %}color:#3C91E6{% endif %}">
+                    {{ elo|floatformat:0 }}
+                  </span>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
   </div>
 </div>
 {% endblock %}
