@@ -1119,20 +1119,26 @@ def _build_feature_row(home_team, away_team, team_profiles, h2h_profiles, league
     row["experience_gap"] = home_exp - away_exp
 
     # ── League-transition adjustment ─────────────────────────────────────
-    # Only for truly promoted teams (0 matches in this league). The adjustment
-    # scales Championship-level stats to EPL-equivalent so they don't inflate
-    # predictions. Teams with ANY matches in this league (including yo-yo clubs
-    # like Genoa/Norwich) use their real stats — the ELO gap handles the rest.
-    if home_exp == 0.0 and home_elo < 1520:
-        row["home_recent_scored"] *= 0.78
-        row["home_recent_conceded"] *= 1.28
-        row["home_scored_sprint"] *= 0.78
-        row["home_strength"] = row["home_recent_scored"] + row["away_recent_conceded"]
-    if away_exp == 0.0 and away_elo < 1520:
-        row["away_recent_scored"] *= 0.78
-        row["away_recent_conceded"] *= 1.28
-        row["away_scored_sprint"] *= 0.78
-        row["away_strength"] = row["away_recent_scored"] + row["home_recent_conceded"]
+    # Teams with 0 matches in this league have stats from a DIFFERENT league
+    # (promoted or relegated). Scale them based on the ELO gap between this
+    # team and the league average — a promoted Championship side (~120 pt gap)
+    # gets a stronger adjustment than a Serie B→Serie A transition (~80 pt gap).
+    if home_exp == 0.0:
+        gap = (home_elo + away_elo) / 2 - home_elo  # positive = below avg
+        if gap > 30:
+            factor = 1.0 - gap / 600  # 120 gap → 0.80, 80 gap → 0.87, 40 gap → 0.93
+            row["home_recent_scored"] *= factor
+            row["home_scored_sprint"] *= factor
+            row["home_recent_conceded"] /= factor
+            row["home_strength"] = row["home_recent_scored"] + row["away_recent_conceded"]
+    if away_exp == 0.0:
+        gap = (home_elo + away_elo) / 2 - away_elo
+        if gap > 30:
+            factor = 1.0 - gap / 600
+            row["away_recent_scored"] *= factor
+            row["away_scored_sprint"] *= factor
+            row["away_recent_conceded"] /= factor
+            row["away_strength"] = row["away_recent_scored"] + row["home_recent_conceded"]
 
     # ── Betting-odds features (closing market odds → implied probabilities) ──
     # Non-zero only for UK leagues where odds CSV columns exist; zero for FD/LF.
