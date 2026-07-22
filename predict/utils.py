@@ -1677,16 +1677,15 @@ def get_or_train_model_bundle(competition_code, force_refresh=False):
 
 
 def _poisson_best_scoreline(home_rate, away_rate, seed=None):
-    """Pick an integer scoreline by weighted random sampling from the full
-    Poisson(λh)×Poisson(λa) distribution, deterministic when seed is provided.
+    """Pick an integer scoreline from Poisson(λh)×Poisson(λa).
 
-    With seed (hash of team names): the SAME fixture always gets the SAME
-    scoreline across runs. Without seed: pure random (use for variety where
-    determinism doesn't matter)."""
+    seed='mode': most-likely score (accurate per-fixture, less variety).
+    seed=<int>: deterministic weighted random (variety, same fixture = same pick).
+    seed=None: pure random (different every run, for non-critical use)."""
     from math import exp, factorial as _fac
-    import random as _random
     scores, weights = [], []
     total = 0.0
+    best, best_w = (0, 0), -1.0
     for h in range(0, 7):
         for a in range(0, 7):
             p = float(exp(-home_rate) * (home_rate ** h) / _fac(h)) * \
@@ -1694,7 +1693,13 @@ def _poisson_best_scoreline(home_rate, away_rate, seed=None):
             scores.append((h, a))
             weights.append(p)
             total += p
-    # Weighted pick — deterministic when seed is provided
+            if p > best_w:
+                best_w, best = p, (h, a)
+
+    if seed == "mode":
+        return best
+
+    import random as _random
     rng = _random.Random(seed) if seed is not None else _random
     r = rng.random() * total
     cumulative = 0.0
@@ -1782,8 +1787,7 @@ def predict_match_outcome(home_team, away_team, models, label_encoder=None):
         raw_h = raw_h * (1 - w) + elo_exp_h * w
         raw_a = raw_a * (1 - w) + elo_exp_a * w
 
-    seed = hash((home_team, away_team)) & 0xFFFFFFFF
-    disp_h, disp_a = _poisson_best_scoreline(raw_h, raw_a, seed=seed)
+    disp_h, disp_a = _poisson_best_scoreline(raw_h, raw_a, seed="mode")
 
     if disp_h > disp_a:
         result = "Home Win"
