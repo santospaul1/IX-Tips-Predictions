@@ -1516,16 +1516,21 @@ def elo_rankings(request):
     elo_error = None
 
     if comp_filter:
-        # Per-competition ELO from the model context
+        # Filter global ELO by teams in this league's standings table (fast, cached)
         try:
-            from predict.utils import get_or_train_model_bundle
-            bundle = get_or_train_model_bundle(comp_filter)
-            if bundle:
-                comp_elos = bundle[2].get("elo_ratings", {})
-                if comp_elos:
-                    elo_all = sorted(comp_elos.items(), key=lambda x: -x[1])
+            from predict.utils import _get_global_elo, get_league_table
+            global_elo = _get_global_elo()
+            table = get_league_table(comp_filter)
+            league_teams = {row["team"]["name"] for row in table} if table else set()
+            if league_teams:
+                elo_all = sorted(
+                    ((t, global_elo.get(t, 0)) for t in league_teams),
+                    key=lambda x: -x[1]
+                )
+            else:
+                elo_all = []
             if not elo_all:
-                elo_error = f"No ELO data for {comp_filter} — train the model first."
+                elo_error = f"No standings data for {comp_filter}."
         except Exception as e:
             elo_error = str(e)
     else:
