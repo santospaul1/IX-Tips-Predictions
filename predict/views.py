@@ -1501,15 +1501,19 @@ def admin_task_dashboard(request):
             "entries": len(df) if df is not None else 0
         })
 
-    # Global ELO ratings — uses cached cross-league ELO (fast, no model load)
+    # Global ELO rankings
     elo_all = []
+    elo_error = None
     try:
         from predict.utils import _get_global_elo
         global_elo, _ = _get_global_elo()
         if global_elo:
             elo_all = sorted(global_elo.items(), key=lambda x: -x[1])
-    except Exception:
-        pass
+    except Exception as e:
+        elo_error = str(e)
+
+    if not elo_all and not elo_error:
+        elo_error = "ELO not yet computed — run predictions first to populate global ratings."
 
     return render(request, "predict/admin_dashboard.html", {
         "tasks": task_info,
@@ -1517,6 +1521,7 @@ def admin_task_dashboard(request):
         "competitions": COMPETITIONS,
         "today": timezone.localdate(),
         "elo_all": elo_all,
+        "elo_error": elo_error,
     })
 
 
