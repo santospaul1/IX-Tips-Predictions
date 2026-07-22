@@ -1501,25 +1501,13 @@ def admin_task_dashboard(request):
             "entries": len(df) if df is not None else 0
         })
 
-    # Global ELO ratings for easy tracking
-    elo_data = {}
+    # Global ELO ratings — uses cached cross-league ELO (fast, no model load)
+    elo_all = []
     try:
         from predict.utils import _get_global_elo
         global_elo, _ = _get_global_elo()
         if global_elo:
-            for comp in COMPETITIONS:
-                # Get per-competition ELO from the model context
-                try:
-                    from predict.utils import get_or_train_model_bundle
-                    bundle = get_or_train_model_bundle(comp)
-                    if bundle:
-                        comp_elos = bundle[2].get("elo_ratings", {})
-                        if comp_elos:
-                            elo_data[comp] = sorted(
-                                comp_elos.items(), key=lambda x: -x[1]
-                            )[:10]  # top 10 per league
-                except Exception:
-                    pass
+            elo_all = sorted(global_elo.items(), key=lambda x: -x[1])
     except Exception:
         pass
 
@@ -1528,7 +1516,7 @@ def admin_task_dashboard(request):
         "cache_info": cache_info,
         "competitions": COMPETITIONS,
         "today": timezone.localdate(),
-        "elo_data": elo_data,
+        "elo_all": elo_all,
     })
 
 

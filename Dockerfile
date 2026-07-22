@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 COPY . .
 
-RUN mkdir -p /code/backups
+RUN mkdir -p /code/backups && chmod +x /code/scripts/release.sh
 
 EXPOSE 8080
 
