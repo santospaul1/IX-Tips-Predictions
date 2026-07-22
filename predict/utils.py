@@ -1230,9 +1230,11 @@ def _get_global_elo():
     if cached is not None:
         return cached
     try:
-        elo, _ = compute_cross_league_elo()
+        elo, _, last_match = compute_cross_league_elo()
         if elo:
             cache.set(GLOBAL_ELO_CACHE_KEY, elo, timeout=60 * 60 * 25)
+            if last_match:
+                cache.set(GLOBAL_LAST_MATCH_KEY, last_match, timeout=60 * 60 * 25)
             logger.info("Global ELO computed: %d teams across leagues", len(elo))
         return elo
     except Exception as e:

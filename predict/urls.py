@@ -41,6 +41,7 @@ urlpatterns = [
     path("logout/", LogoutView.as_view(next_page="login"), name="logout"),
     path("admin-dashboard/", views.admin_task_dashboard, name="admin-dashboard"),
     path("team_logos/", views.team_logos_preview, name="team_logos"),
+    path("elo-rankings/", views.elo_rankings, name="elo_rankings"),
     path('live_predictions/', views.live_predictions_by_date, name='live_predictions'),
     path("league-table/<str:competition_code>/", views.league_table_view, name="league_table"),
     path("refresh-league-table/", views.refresh_league_table_cache, name="refresh_league_table"),

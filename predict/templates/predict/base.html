@@ -179,16 +179,16 @@
           <span class="text">Results</span>
         </a>
       </li>
+      <li class="{% if request.path == '/elo-rankings/' %}active{% endif %}">
+        <a href="{% url 'elo_rankings' %}">
+          <i class='bx bx-trending-up bx-sm'></i>
+          <span class="text">Rankings</span>
+        </a>
+      </li>
       <li class="{% if request.path == '/team_logos/' %}active{% endif %}">
         <a href="{% url 'team_logos' %}">
           <i class='bx bx-image bx-sm'></i>
           <span class="text">Logos</span>
-        </a>
-      </li>
-      <li>
-        <a href="{% url 'admin-dashboard' %}#elo">
-          <i class='bx bx-trending-up bx-sm'></i>
-          <span class="text">Rankings</span>
         </a>
       </li>
     </ul>

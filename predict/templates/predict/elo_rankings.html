@@ -1,0 +1,53 @@
+{% extends "predict/base.html" %}
+{% load static %}
+
+{% block title %}ELO Rankings - IX-Tips{% endblock %}
+
+{% block content %}
+<div class="dashboard-page">
+  <div class="head-title">
+    <div class="left">
+      <h1>Team ELO Rankings</h1>
+      <ul class="breadcrumb">
+        <li><a href="#">Results</a></li>
+        <li><i class='bx bx-chevron-right'></i></li>
+        <li><a class="active" href="#">Rankings</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="table-data">
+    <div class="order table-card">
+      <div class="admin-card-head">
+        <h3><i class='bx bx-trending-up' style="color:#8b5cf6; margin-right:6px;"></i>All Teams by ELO</h3>
+        <span style="font-size:0.72rem; color:var(--text-secondary);">{{ elo_all|length }} teams</span>
+      </div>
+
+      {% if elo_error %}
+      <p style="padding:16px; color:var(--text-secondary);">{{ elo_error }}</p>
+      {% else %}
+      <div class="table-scroll">
+        <table class="dashboard-table">
+          <thead>
+            <tr><th>#</th><th>Team</th><th>ELO</th></tr>
+          </thead>
+          <tbody>
+            {% for team, elo in elo_all %}
+            <tr>
+              <td style="width:40px; color:var(--text-secondary);">{{ forloop.counter }}</td>
+              <td class="cell-strong">{{ team }}</td>
+              <td>
+                <span style="font-weight:700; {% if elo > 1700 %}color:#10b981{% elif elo < 1400 %}color:#ef4444{% else %}color:#3C91E6{% endif %}">
+                  {{ elo|floatformat:0 }}
+                </span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
