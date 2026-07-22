@@ -6,7 +6,7 @@ console_command = '/code/manage.py shell'
   dockerfile = "Dockerfile"
 
 [deploy]
-  release_command = '/code/scripts/release.sh'
+  release_command = 'sh /code/scripts/release.sh'
 
 [env]
   TZ = 'Africa/Nairobi'
