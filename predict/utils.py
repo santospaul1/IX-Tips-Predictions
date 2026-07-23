@@ -1769,11 +1769,12 @@ def predict_match_outcome(home_team, away_team, models, label_encoder=None):
     raw_h = float(np.clip(ph, 0.1, 6))
     raw_a = float(np.clip(pa, 0.1, 6))
 
-    # ── ELO blend ────────────────────────────────────────────────────────
-    # When XGBoost disagrees strongly with ELO (e.g. Monza predicted to score
-    # 2.3 away at Inter), blend in the ELO-based goal expectation. The blend
-    # weight increases with |elo_gap| — a 300+ ELO gap means 70% weight to
-    # the ELO prior, preventing absurd upsets like Hull beating Man Utd.
+    # ── Adaptive ELO blend ───────────────────────────────────────────────
+    # When XGBoost disagrees strongly with ELO, blend in the ELO-based goal
+    # expectation. Blend weight adapts to:
+    #   (a) ELO gap magnitude — large gaps trust ELO more
+    #   (b) League experience — promoted teams (0 matches) trust ELO more;
+    #       established teams (30+ matches) let XGBoost take over
     if isinstance(model_extra, dict):
         elo_h = float(model_extra.get("elo_ratings", {}).get(home_team, 1500))
         elo_a = float(model_extra.get("elo_ratings", {}).get(away_team, 1500))
@@ -1782,10 +1783,14 @@ def predict_match_outcome(home_team, away_team, models, label_encoder=None):
         league_ag = float(model_extra.get("league_away_goals", 1.1))
         elo_exp_h = max(0.3, league_hg + elo_diff * 0.0035)
         elo_exp_a = max(0.3, league_ag - elo_diff * 0.0035)
-        # Blend weight: 33% at 100 gap, 67% at 200 gap, 80% at 240+
-        w = min(0.8, abs(elo_diff) / 300)
-        raw_h = raw_h * (1 - w) + elo_exp_h * w
-        raw_a = raw_a * (1 - w) + elo_exp_a * w
+        # Per-team experience modifier — promoted teams (0 matches) get more
+        # ELO weight on THEIR goal prediction. Established teams trust XGBoost.
+        h_exp = len(model_extra.get("team_profiles", {}).get(home_team, {}).get("overall_points", []))
+        a_exp = len(model_extra.get("team_profiles", {}).get(away_team, {}).get("overall_points", []))
+        w_h = min(0.85, abs(elo_diff) / 250) * max(0.4, 1.0 - h_exp / 80)
+        w_a = min(0.85, abs(elo_diff) / 250) * max(0.4, 1.0 - a_exp / 80)
+        raw_h = raw_h * (1 - w_h) + elo_exp_h * w_h
+        raw_a = raw_a * (1 - w_a) + elo_exp_a * w_a
 
     disp_h, disp_a = _poisson_best_scoreline(raw_h, raw_a, seed="mode")
 
