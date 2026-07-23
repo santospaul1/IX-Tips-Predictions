@@ -1566,13 +1566,53 @@ def train_models(X, y_home, y_away, sample_weight=None):
 
     logger.info(f" Trained models [{kind}]; home_rmse={home_rmse}, away_rmse={away_rmse}")
 
-    return model_home, model_away, label_encoder
+    # ── Probability calibration ───────────────────────────────────────────
+    # Maps Poisson-derived P(home/draw/away) → true probabilities using
+    # isotonic regression, so "61%" actually means 61% chance, not just
+    # "61 confidence points." Fitted on the validation set.
+    calibrator = None
+    try:
+        from sklearn.isotonic import IsotonicRegression
+        from math import exp, factorial as _fac
+        ph_val = np.clip(model_home.predict(X_te), 0.1, 6)
+        pa_val = np.clip(model_away.predict(X_te), 0.1, 6)
+        pred_probs = {"H": [], "D": [], "A": []}
+        actuals = {"H": [], "D": [], "A": []}
+        for i in range(len(ph_val)):
+            rh, ra = float(ph_val[i]), float(pa_val[i])
+            p_h = p_d = p_a = 0.0
+            for hg in range(0, 7):
+                phg = exp(-rh) * (rh ** hg) / _fac(hg)
+                for ag in range(0, 7):
+                    pag = exp(-ra) * (ra ** ag) / _fac(ag)
+                    jp = phg * pag
+                    if hg > ag: p_h += jp
+                    elif hg == ag: p_d += jp
+                    else: p_a += jp
+            pred_probs["H"].append(p_h); pred_probs["D"].append(p_d); pred_probs["A"].append(p_a)
+            hg_a, ag_a = int(yh_te.iloc[i]), int(ya_te.iloc[i])
+            if hg_a > ag_a: actuals["H"].append(1); actuals["D"].append(0); actuals["A"].append(0)
+            elif hg_a == ag_a: actuals["H"].append(0); actuals["D"].append(1); actuals["A"].append(0)
+            else: actuals["H"].append(0); actuals["D"].append(0); actuals["A"].append(1)
+        calibrator = {}
+        for mkt in ("H", "D", "A"):
+            if len(set(pred_probs[mkt])) > 5:
+                iso = IsotonicRegression(out_of_bounds="clip", y_min=0.01, y_max=0.99)
+                idx = sorted(range(len(pred_probs[mkt])), key=lambda j: pred_probs[mkt][j])
+                iso.fit([pred_probs[mkt][j] for j in idx], [actuals[mkt][j] for j in idx])
+                calibrator[mkt] = iso
+        logger.info(f" Calibrator fitted: {len(calibrator)}/3 markets")
+    except Exception as e:
+        logger.warning(f" Calibration skipped: {e}")
+
+    return model_home, model_away, label_encoder, calibrator
 
 
 def train_competition_models(training_df, lookback=8):
     X, y_home, y_away, model_context = build_training_features(training_df, lookback=lookback)
     sample_weight = np.linspace(0.35, 1.0, num=len(X)) if len(X) else None
-    model_home, model_away, _ = train_models(X, y_home, y_away, sample_weight=sample_weight)
+    model_home, model_away, _, calibrator = train_models(X, y_home, y_away, sample_weight=sample_weight)
+    model_context["calibrator"] = calibrator
     return model_home, model_away, model_context
 
 
