@@ -1782,8 +1782,8 @@ def predict_match_outcome(home_team, away_team, models, label_encoder=None):
         league_ag = float(model_extra.get("league_away_goals", 1.1))
         elo_exp_h = max(0.3, league_hg + elo_diff * 0.0035)
         elo_exp_a = max(0.3, league_ag - elo_diff * 0.0035)
-        # Blend weight: 0% at 50 gap, 70% at 300 gap
-        w = min(0.7, max(0.0, (abs(elo_diff) - 50) / 400))
+        # Blend weight: 33% at 100 gap, 67% at 200 gap, 80% at 240+
+        w = min(0.8, abs(elo_diff) / 300)
         raw_h = raw_h * (1 - w) + elo_exp_h * w
         raw_a = raw_a * (1 - w) + elo_exp_a * w
 
