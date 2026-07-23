@@ -1841,7 +1841,28 @@ def predict_match_outcome(home_team, away_team, models, label_encoder=None):
     else:
         result = "Draw"
 
-    return result, disp_h, disp_a, raw_h, raw_a
+    # ── Apply probability calibrator if available ──────────────────────────
+    calibrated = None
+    if isinstance(model_extra, dict):
+        cal = model_extra.get("calibrator")
+        if cal:
+            from math import exp, factorial as _fac
+            p_h = p_d = p_a = 0.0
+            for hg in range(0, 7):
+                phg = exp(-raw_h) * (raw_h ** hg) / _fac(hg)
+                for ag in range(0, 7):
+                    pag = exp(-raw_a) * (raw_a ** ag) / _fac(ag)
+                    jp = phg * pag
+                    if hg > ag: p_h += jp
+                    elif hg == ag: p_d += jp
+                    else: p_a += jp
+            calibrated = {
+                "H": float(cal["H"].predict([p_h])[0]) if "H" in cal else p_h,
+                "D": float(cal["D"].predict([p_d])[0]) if "D" in cal else p_d,
+                "A": float(cal["A"].predict([p_a])[0]) if "A" in cal else p_a,
+            }
+
+    return result, disp_h, disp_a, raw_h, raw_a, calibrated
 
 
 # ---------- saving predictions (compatibility with tasks.py) ----------
@@ -1883,7 +1904,7 @@ def save_predictions(matches, model_home=None, model_away=None, le=None, match_d
             predicted_away_rate = None
             if (model_home is not None) and (model_away is not None):
                 if isinstance(le, dict):
-                    _, predicted_home_goals, predicted_away_goals, predicted_home_rate, predicted_away_rate = \
+                    _, predicted_home_goals, predicted_away_goals, predicted_home_rate, predicted_away_rate, _calib = \
                         predict_match_outcome(home, away, (model_home, model_away, le))
                 elif le is not None:
                     try:
@@ -1905,7 +1926,7 @@ def save_predictions(matches, model_home=None, model_away=None, le=None, match_d
                         predicted_home_rate, predicted_away_rate,
                         seed=hash((home, away)) & 0xFFFFFFFF)
                 else:
-                    _, predicted_home_goals, predicted_away_goals, predicted_home_rate, predicted_away_rate = \
+                    _, predicted_home_goals, predicted_away_goals, predicted_home_rate, predicted_away_rate, _calib = \
                         predict_match_outcome(home, away, (model_home, model_away, None))
             else:
                 # No models supplied -> try to read existing predictions in match

@@ -551,7 +551,7 @@ def live_predictions_by_date(request):
                     match_id = match.get('id')
 
                     try:
-                        result_label, pred_home, pred_away, rate_h, rate_a = predict_match_outcome(
+                        result_label, pred_home, pred_away, rate_h, rate_a, _ = predict_match_outcome(
                             home, away, (model_home, model_away, model_context),
                         )
 
