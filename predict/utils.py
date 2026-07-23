@@ -1504,11 +1504,40 @@ def train_models(X, y_home, y_away, sample_weight=None):
         X_numeric = pd.get_dummies(X_train, columns=non_numeric, dummy_na=False)
 
     X_numeric = X_numeric.fillna(0)
-
-    split_index = max(1, int(len(X_numeric) * 0.8))
     sample_weight = None if sample_weight is None else np.asarray(sample_weight, dtype=float)
 
-    if len(X_numeric) < 10:
+    # ── Walk-forward validation ───────────────────────────────────────────
+    try:
+        import xgboost as _xgb
+        from sklearn.metrics import mean_absolute_error as _mae
+        n = len(X_numeric)
+        if n >= 100:
+            folds = min(4, n // 200)
+            fsize = n // (folds + 1)
+            wf_metrics = []
+            for f in range(1, folds + 1):
+                te = f * fsize
+                vs = te; ve = min(n, vs + fsize // 2)
+                if ve <= vs: continue
+                mh = _xgb.XGBRegressor(n_estimators=200, objective="count:poisson",
+                      max_depth=5, learning_rate=0.05, random_state=42, n_jobs=-1)
+                ma = _xgb.XGBRegressor(n_estimators=200, objective="count:poisson",
+                      max_depth=5, learning_rate=0.05, random_state=42, n_jobs=-1)
+                mh.fit(X_numeric.iloc[:te], y_home.iloc[:te])
+                ma.fit(X_numeric.iloc[:te], y_away.iloc[:te])
+                mae_h = _mae(y_home.iloc[vs:ve], mh.predict(X_numeric.iloc[vs:ve]))
+                mae_a = _mae(y_away.iloc[vs:ve], ma.predict(X_numeric.iloc[vs:ve]))
+                wf_metrics.append((te, vs, ve, mae_h, mae_a))
+            if wf_metrics:
+                avg_h = sum(m[3] for m in wf_metrics) / len(wf_metrics)
+                avg_a = sum(m[4] for m in wf_metrics) / len(wf_metrics)
+                logger.info(f" Walk-forward ({len(wf_metrics)} folds): MAE home={avg_h:.3f} away={avg_a:.3f}")
+    except Exception:
+        pass
+
+    # Full training on 80/20 split (for calibration + final model)
+    split_index = max(1, int(n * 0.8))
+    if n < 10:
         X_tr, X_te = X_numeric, X_numeric
         yh_tr, yh_te = y_home, y_home
         ya_tr, ya_te = y_away, y_away
@@ -1604,6 +1633,17 @@ def train_models(X, y_home, y_away, sample_weight=None):
         logger.info(f" Calibrator fitted: {len(calibrator)}/3 markets")
     except Exception as e:
         logger.warning(f" Calibration skipped: {e}")
+
+    # ── SHAP feature importance ──────────────────────────────────────────
+    try:
+        import shap
+        explainer = shap.TreeExplainer(model_home)
+        shap_values = explainer.shap_values(X_te.iloc[:100])
+        importance = np.abs(shap_values).mean(axis=0)
+        top = sorted(zip(X_te.columns, importance), key=lambda x: -x[1])[:15]
+        logger.info(f" SHAP top features: {' | '.join(f'{n}={v:.3f}' for n,v in top)}")
+    except Exception as e:
+        logger.info(f" SHAP skipped ({e})")
 
     return model_home, model_away, label_encoder, calibrator
 

@@ -14,4 +14,5 @@ reportlab==4.4.2
 Requests==2.32.4
 scikit_learn==1.7.0
 xgboost==2.1.4
+shap==0.46.0
 redis==5.2.1
