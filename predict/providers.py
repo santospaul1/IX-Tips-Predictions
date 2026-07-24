@@ -591,6 +591,19 @@ def _uk_row_to_match(row, fduk_code):
     }
 
 
+def _uk_extra_matches(fduk_code):
+    """All matches from /new/CODE.csv (single combined file). Cached."""
+    ck = f"uk_extra::{fduk_code}"
+    cached = cache.get(ck)
+    if cached is not None:
+        return cached
+    url = f"{UK_BASE}/new/{fduk_code}.csv"
+    rows = _uk_get_csv(url)
+    matches = [m for m in (_uk_row_to_match(r, fduk_code) for r in rows) if m]
+    cache.set(ck, matches, timeout=UK_CURRENT_CACHE_TIMEOUT)
+    return matches
+
+
 def _uk_main_season(fduk_code, season_year):
     """Results for one season of a main league (cached; past seasons long)."""
     ck = f"uk_main::{fduk_code}::{season_year}"
@@ -628,22 +641,30 @@ def _uk_current_matches(competition_code):
     mapping = FOOTBALL_DATA_UK_CODES.get(competition_code)
     if not mapping:
         return []
-    _, fduk_code = mapping
+    kind, fduk_code = mapping
     ck = f"uk_current::{competition_code}"
     cached = cache.get(ck)
     if cached is not None:
         return cached
 
-    season = _current_season_start_year()
-    season_matches = _uk_main_season(fduk_code, season)
-
-    # If the computed season file doesn't exist yet (e.g. July, before the
-    # 2026/27 CSVs are published), fall back to the previous season whose CSV
-    # has real data. <10 matches almost certainly means an empty/404 file.
-    if len(season_matches) < 10:
-        logger.info("UK season %d empty for %s (%d matches) — falling back to %d",
-                     season, fduk_code, len(season_matches), season - 1)
-        season_matches = _uk_main_season(fduk_code, season - 1)
+    if kind == "extra":
+        # Extra leagues: single combined file, filter to current season
+        all_matches = _uk_extra_matches(fduk_code)
+        season = _current_season_start_year()
+        season_matches = [m for m in all_matches
+                          if m.get("utcDate", "").startswith(str(season))
+                          or m.get("utcDate", "").startswith(str(season + 1))]
+        if len(season_matches) < 10:
+            season_matches = [m for m in all_matches
+                              if m.get("utcDate", "").startswith(str(season - 1))
+                              or m.get("utcDate", "").startswith(str(season))]
+    else:
+        season = _current_season_start_year()
+        season_matches = _uk_main_season(fduk_code, season)
+        if len(season_matches) < 10:
+            logger.info("UK season %d empty for %s (%d matches) — falling back to %d",
+                        season, fduk_code, len(season_matches), season - 1)
+            season_matches = _uk_main_season(fduk_code, season - 1)
 
     matches = season_matches + _uk_fixtures(fduk_code)
     cache.set(ck, matches, timeout=UK_CURRENT_CACHE_TIMEOUT)
@@ -663,7 +684,14 @@ def uk_fetch_matches_by_season(competition_code, season_year):
     mapping = FOOTBALL_DATA_UK_CODES.get(competition_code)
     if not mapping:
         return []
-    _, fduk_code = mapping
+    kind, fduk_code = mapping
+    if kind == "extra":
+        all_matches = _uk_extra_matches(fduk_code)
+        if season_year is None:
+            season_year = _current_season_start_year()
+        return [m for m in all_matches if m["status"] == "FINISHED" and (
+            (m.get("utcDate", "") or "").startswith(str(season_year)) or
+            (m.get("utcDate", "") or "").startswith(str(season_year + 1)))]
     if season_year is None:
         season_year = _current_season_start_year()
     return [m for m in _uk_main_season(fduk_code, season_year) if m["status"] == "FINISHED"]

@@ -43,6 +43,10 @@ COMPETITIONS = {
     "ITA2": "Serie B",
     "ESP2": "LaLiga 2",
     "FRA2": "Ligue 2",
+    # ── Extra leagues from football-data.co.uk (free CSVs, single file) ──
+    "JPN": "J1 League",
+    "CHN": "Chinese Super League",
+    "RUS": "Russian Premier League",
 }
 
 # Which provider serves each competition. Anything not listed defaults to "FD".
@@ -53,6 +57,7 @@ COMPETITION_PROVIDERS = {
     "SAU": "LF",
     "BEL": "UK", "TUR": "UK", "GRE": "UK", "SCO": "UK",
     "GER2": "UK", "ITA2": "UK", "ESP2": "UK", "FRA2": "UK",
+    "JPN": "UK", "CHN": "UK", "RUS": "UK",
 }
 
 # football-data.co.uk mapping: our code -> (kind, fduk_code).
@@ -67,6 +72,9 @@ FOOTBALL_DATA_UK_CODES = {
     "ITA2": ("main", "I2"),
     "ESP2": ("main", "SP2"),
     "FRA2": ("main", "F2"),
+    "JPN": ("extra", "JPN"),
+    "CHN": ("extra", "CHN"),
+    "RUS": ("extra", "RUS"),
 }
 
 # API-Football numeric league IDs (verified against the account on 2026-05-27).
@@ -99,6 +107,7 @@ COMPETITION_COUNTRY = {
     "FL1": "fr", "DED": "nl", "PPL": "pt", "CL": "eu", "BSA": "br",
     "BEL": "be", "TUR": "tr", "GRE": "gr", "SCO": "gb-sct", "GER2": "de",
     "ITA2": "it", "ESP2": "es", "FRA2": "fr", "SAU": "sa",
+    "JPN": "jp", "CHN": "cn", "RUS": "ru",
 }
 
 
