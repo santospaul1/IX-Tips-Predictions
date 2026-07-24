@@ -47,6 +47,22 @@ COMPETITIONS = {
     "JPN": "J1 League",
     "CHN": "Chinese Super League",
     "RUS": "Russian Premier League",
+    # ── More UK leagues ──
+    "ENG2": "League One",
+    "ENG3": "League Two",
+    "SCO2": "Scottish Championship",
+    "SCO3": "Scottish League One",
+    "SCO4": "Scottish League Two",
+    "ARG": "Argentina Primera Division",
+    "AUT": "Austrian Bundesliga",
+    "FIN": "Finnish Veikkausliiga",
+    "MEX": "Liga MX",
+    "NOR": "Norwegian Eliteserien",
+    "POL": "Polish Ekstraklasa",
+    "ROU": "Romanian Liga I",
+    "SWE": "Swedish Allsvenskan",
+    "SWZ": "Swiss Super League",
+    "USA": "Major League Soccer",
 }
 
 # Which provider serves each competition. Anything not listed defaults to "FD".
@@ -58,6 +74,9 @@ COMPETITION_PROVIDERS = {
     "BEL": "UK", "TUR": "UK", "GRE": "UK", "SCO": "UK",
     "GER2": "UK", "ITA2": "UK", "ESP2": "UK", "FRA2": "UK",
     "JPN": "UK", "CHN": "UK", "RUS": "UK",
+    "ENG2": "UK", "ENG3": "UK", "SCO2": "UK", "SCO3": "UK", "SCO4": "UK",
+    "ARG": "UK", "AUT": "UK", "FIN": "UK", "MEX": "UK", "NOR": "UK",
+    "POL": "UK", "ROU": "UK", "SWE": "UK", "SWZ": "UK", "USA": "UK",
 }
 
 # football-data.co.uk mapping: our code -> (kind, fduk_code).
@@ -75,6 +94,12 @@ FOOTBALL_DATA_UK_CODES = {
     "JPN": ("extra", "JPN"),
     "CHN": ("extra", "CHN"),
     "RUS": ("extra", "RUS"),
+    "ENG2": ("main", "E2"), "ENG3": ("main", "E3"),
+    "SCO2": ("main", "SC1"), "SCO3": ("main", "SC2"), "SCO4": ("main", "SC3"),
+    "ARG": ("extra", "ARG"), "AUT": ("extra", "AUT"), "FIN": ("extra", "FIN"),
+    "MEX": ("extra", "MEX"), "NOR": ("extra", "NOR"), "POL": ("extra", "POL"),
+    "ROU": ("extra", "ROU"), "SWE": ("extra", "SWE"), "SWZ": ("extra", "SWZ"),
+    "USA": ("extra", "USA"),
 }
 
 # API-Football numeric league IDs (verified against the account on 2026-05-27).
@@ -108,6 +133,10 @@ COMPETITION_COUNTRY = {
     "BEL": "be", "TUR": "tr", "GRE": "gr", "SCO": "gb-sct", "GER2": "de",
     "ITA2": "it", "ESP2": "es", "FRA2": "fr", "SAU": "sa",
     "JPN": "jp", "CHN": "cn", "RUS": "ru",
+    "ENG2": "gb-eng", "ENG3": "gb-eng",
+    "SCO2": "gb-sct", "SCO3": "gb-sct", "SCO4": "gb-sct",
+    "ARG": "ar", "AUT": "at", "FIN": "fi", "MEX": "mx", "NOR": "no",
+    "POL": "pl", "ROU": "ro", "SWE": "se", "SWZ": "ch", "USA": "us",
 }
 
 
