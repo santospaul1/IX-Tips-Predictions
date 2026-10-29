@@ -1,4 +1,4 @@
-name: Deploy IX-Tips
+name: Build IX-Tips
 
 on:
   push:
@@ -8,9 +8,6 @@ on:
 concurrency:
   group: deploy
   cancel-in-progress: true
-
-env:
-  FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
 jobs:
   test:
@@ -49,11 +46,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only --detach
-#Test
+
+      - name: Build Docker image
+        run: docker build --tag ix-tips-predictions .
+
   smoke:
-    name: Smoke test
+    name: Production smoke test
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -81,10 +79,10 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Deployment status
+      - name: Workflow status
         run: |
           if [ "${{ needs.smoke.result }}" = "success" ]; then
-            echo "✅ Deploy succeeded — https://ix-tips-predictions.fly.dev"
+            echo "✅ Build and production smoke checks succeeded — https://ix-tips-predictions.fly.dev"
           else
-            echo "❌ Deploy failed — check https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "❌ Build or production smoke checks failed — check https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           fi
