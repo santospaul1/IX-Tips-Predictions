@@ -1,88 +1,179 @@
-name: Build IX-Tips
+name: Oracle Cloud deployment
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:  # manual trigger from GitHub UI
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
 
 concurrency:
-  group: deploy
-  cancel-in-progress: true
+  group: ix-tips-production-deploy
+  cancel-in-progress: false
 
 jobs:
   test:
-    name: Lint & test
+    name: Django checks and tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout source
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
 
-      - run: pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Syntax check
+      - name: Compile Python source
         run: |
           python -m py_compile $(find predict score_predictor -name "*.py" -not -path "*/migrations/*" -not -path "*/__pycache__/*")
 
       - name: Django system check
-        run: |
-          DATABASE_URL=sqlite://:memory: \
-          REDIS_URL=redis://localhost:6379/0 \
-          SECRET_KEY=ci-test \
-          python manage.py check --deploy 2>&1 || true
+        env:
+          DATABASE_URL: sqlite://:memory:
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: ci-test-only-not-for-production
+        run: python manage.py check
 
-      - name: Run tests
-        run: |
-          DATABASE_URL=sqlite://:memory: \
-          SECRET_KEY=ci-test \
-          python manage.py test predict --verbosity=2 2>&1 || true
+      - name: Run prediction app tests
+        env:
+          DATABASE_URL: sqlite://:memory:
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: ci-test-only-not-for-production
+        run: python manage.py test predict --verbosity=2
 
   build:
-    name: Build
+    name: Build production image
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout source
+        uses: actions/checkout@v4
 
-      - name: Build Docker image
-        run: docker build --tag ix-tips-predictions .
+      - name: Build image tags used by the ix_tips Compose project
+        run: |
+          docker build --pull \
+            --tag ix_tips-app:latest \
+            --tag ix_tips-cron:latest .
 
-  smoke:
-    name: Production smoke test
+      - name: Save image archive
+        run: docker save ix_tips-app:latest ix_tips-cron:latest --output ix-tips-image.tar
+
+      - name: Upload image for Oracle runner
+        uses: actions/upload-artifact@v4
+        with:
+          name: ix-tips-production-image
+          path: ix-tips-image.tar
+          if-no-files-found: error
+          retention-days: 1
+
+  deploy:
+    name: Deploy to Oracle Cloud VM
     needs: build
-    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    runs-on: self-hosted
+    timeout-minutes: 25
     steps:
-      - name: Wait for deploy to settle
-        run: sleep 30
+      - name: Download production image
+        uses: actions/download-artifact@v4
+        with:
+          name: ix-tips-production-image
+          path: ./deployment-image
 
-      - name: Health check
+      - name: Deploy safely using the existing Compose project
+        env:
+          IMAGE_ARCHIVE: ./deployment-image/ix-tips-image.tar
+        shell: bash
         run: |
-          for i in $(seq 1 10); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://ix-tips-predictions.fly.dev/health/)
-            echo "Attempt $i: HTTP $STATUS"
-            [ "$STATUS" = "200" ] && exit 0
-            sleep 6
-          done
-          echo "Health check failed after 10 attempts"
-          exit 1
+          set -Eeuo pipefail
 
-      - name: API smoke test
-        run: |
-          curl -sf https://ix-tips-predictions.fly.dev/api/v1/summary/ | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'date' in d; print('summary OK, date:', d['date'])"
+          PROJECT_DIR="/opt/ix_tips"
+          COMPOSE_FILE="$PROJECT_DIR/docker-compose.yml"
+          OVERRIDE_FILE="$PROJECT_DIR/docker-compose.override.yml"
 
-  notify:
-    name: Notify
-    needs: smoke
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Workflow status
-        run: |
-          if [ "${{ needs.smoke.result }}" = "success" ]; then
-            echo "✅ Build and production smoke checks succeeded — https://ix-tips-predictions.fly.dev"
-          else
-            echo "❌ Build or production smoke checks failed — check https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          test -f "$COMPOSE_FILE" || {
+            echo "Missing active Compose file: $COMPOSE_FILE"
+            exit 1
+          }
+          test -f "$PROJECT_DIR/.env" || {
+            echo "Missing production .env; refusing to deploy."
+            exit 1
+          }
+          test -f "$IMAGE_ARCHIVE"
+
+          COMPOSE=(docker compose --project-name ix_tips --project-directory "$PROJECT_DIR" -f "$COMPOSE_FILE")
+          if [[ -f "$OVERRIDE_FILE" ]]; then
+            COMPOSE+=(-f "$OVERRIDE_FILE")
           fi
+
+          "${COMPOSE[@]}" config --quiet
+          docker info >/dev/null
+
+          # Keep the currently deployed image tags for a quick rollback.
+          HAVE_APP=0
+          HAVE_CRON=0
+          if docker image inspect ix_tips-app:latest >/dev/null 2>&1; then
+            docker image tag ix_tips-app:latest ix_tips-app:rollback
+            HAVE_APP=1
+          fi
+          if docker image inspect ix_tips-cron:latest >/dev/null 2>&1; then
+            docker image tag ix_tips-cron:latest ix_tips-cron:rollback
+            HAVE_CRON=1
+          fi
+
+          rollback() {
+            status=$?
+            if [[ $status -ne 0 ]]; then
+              echo "Deployment failed; restoring previous image tags where available."
+              if [[ "$HAVE_APP" == "1" ]]; then
+                docker image tag ix_tips-app:rollback ix_tips-app:latest
+              fi
+              if [[ "$HAVE_CRON" == "1" ]]; then
+                docker image tag ix_tips-cron:rollback ix_tips-cron:latest
+              fi
+              if [[ "$HAVE_APP" == "1" && "$HAVE_CRON" == "1" ]]; then
+                "${COMPOSE[@]}" up -d --no-build --force-recreate app cron || true
+              fi
+            fi
+            exit "$status"
+          }
+          trap rollback EXIT
+
+          docker load --input "$IMAGE_ARCHIVE"
+
+          # Apply schema changes before replacing the currently serving app.
+          "${COMPOSE[@]}" run --rm --no-deps app python manage.py migrate --noinput
+
+          # Only app and cron are recreated. The database and named volumes remain untouched.
+          "${COMPOSE[@]}" up -d --no-build --force-recreate app cron
+
+          HEALTHY=0
+          for attempt in $(seq 1 24); do
+            STATUS=$(curl --silent --output /dev/null --write-out "%{http_code}" http://127.0.0.1:8000/health/ || true)
+            echo "Oracle app health check $attempt/24: HTTP $STATUS"
+            if [[ "$STATUS" == "200" ]]; then
+              HEALTHY=1
+              break
+            fi
+            sleep 5
+          done
+
+          if [[ "$HEALTHY" != "1" ]]; then
+            echo "Application did not become healthy."
+            "${COMPOSE[@]}" ps
+            "${COMPOSE[@]}" logs --tail=100 app
+            exit 1
+          fi
+
+          trap - EXIT
+          echo "Oracle deployment completed successfully."
