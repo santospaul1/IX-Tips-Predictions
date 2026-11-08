@@ -6,8 +6,9 @@ from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
-from .constants import API_TOKEN, COMPETITIONS, TRAINING_CACHE_TIMEOUT
+from .constants import COMPETITIONS, TRAINING_CACHE_TIMEOUT
 from .models import MatchPrediction, TopPick
+from .fixture_sources import fetch_fixture_matches_by_date
 from .utils import (
     fetch_and_cache_team_metadata,
     fetch_matches_by_date,
@@ -44,10 +45,10 @@ def predict_next_fixtures_for_competition(competition_code, match_date=None):
 
     if not match_date:
         match_dates_to_use = find_upcoming_match_dates(
-            fetch_matches_by_date,
+            fetch_fixture_matches_by_date,
             None,
             competition_code,
-            days_ahead=7,
+            days_ahead=30,
         )
         if not match_dates_to_use:
             return
@@ -72,7 +73,7 @@ def predict_next_fixtures_for_competition(competition_code, match_date=None):
     total_saved = 0
     for match_date_to_use in match_dates_to_use:
         logger.info(f" Processing competition: {competition_code} for {match_date_to_use}")
-        matches = fetch_matches_by_date(API_TOKEN, competition_code, match_date_to_use)
+        matches = fetch_fixture_matches_by_date(None, competition_code, match_date_to_use)
         if not matches:
             logger.warning(f" No matches found for {competition_code} on {match_date_to_use}")
             continue
@@ -94,9 +95,6 @@ def predict_next_fixtures_for_competition(competition_code, match_date=None):
 @shared_task
 def cache_training_data():
     logger.info("Starting training data caching")
-    if not API_TOKEN:
-        logger.warning("FOOTBALL_DATA_API_KEY is missing. Skipping training-data caching.")
-        return
     for comp in COMPETITIONS:
         key = f"training_data_{comp}"
         df = fetch_training_data_all_seasons(comp)
