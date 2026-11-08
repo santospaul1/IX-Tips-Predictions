@@ -50,6 +50,7 @@ def _provider_order(competition_code):
 
 def _team_key(value):
     value = (value or "").casefold()
+    value = re.sub(r"\b(fc|cf|ac|sc|afc|club)\b", " ", value)
     value = re.sub(r"[^a-z0-9]+", " ", value)
     return " ".join(value.split())
 
