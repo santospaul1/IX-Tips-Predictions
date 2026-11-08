@@ -3,6 +3,8 @@ name: Oracle Cloud deployment
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -80,7 +82,7 @@ jobs:
   deploy:
     name: Deploy to Oracle Cloud VM
     needs: build
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: self-hosted
     timeout-minutes: 25
     steps:
