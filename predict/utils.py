@@ -2373,30 +2373,40 @@ def get_mshipi_predictions(limit=20):
     )
 
     selected = []
-    selected_keys = set()
+    selected_fixture_keys = set()
     market_counts = defaultdict(int)
 
+    # The TopPick database constraint permits one row per fixture/date/variant.
+    # Keep market diversity, but never select the same fixture twice.
     for market in market_targets:
         for candidate in ordered_candidates:
-            key = (candidate["match_date"], candidate["home_team"], candidate["away_team"], candidate["tip"])
-            if candidate["tip"] != market or key in selected_keys:
+            fixture_key = (
+                candidate["match_date"],
+                candidate["home_team"],
+                candidate["away_team"],
+            )
+            if candidate["tip"] != market or fixture_key in selected_fixture_keys:
                 continue
             selected.append(candidate)
-            selected_keys.add(key)
+            selected_fixture_keys.add(fixture_key)
             market_counts[market] += 1
             break
 
     for candidate in ordered_candidates:
         if len(selected) >= limit:
             break
-        key = (candidate["match_date"], candidate["home_team"], candidate["away_team"], candidate["tip"])
-        if key in selected_keys:
+        fixture_key = (
+            candidate["match_date"],
+            candidate["home_team"],
+            candidate["away_team"],
+        )
+        if fixture_key in selected_fixture_keys:
             continue
         market = candidate["tip"]
         if market_counts[market] >= market_caps.get(market, 2):
             continue
         selected.append(candidate)
-        selected_keys.add(key)
+        selected_fixture_keys.add(fixture_key)
         market_counts[market] += 1
 
     grouped = defaultdict(list)
@@ -2424,39 +2434,112 @@ def get_top_predictions_for_variant(limit=10, variant="1"):
 
 def store_top_pick_for_date(predictions_by_date, variant="1"):
     """
-    Atomically replaces TopPicks for the given dates+variant. Wrapped in a
-    transaction so external readers never see an empty table between the
-    delete and the bulk_create (would show as "no picks" in the mobile app).
+    Safely refresh TopPicks for each date and variant.
+
+    - Deduplicates input using the database's fixture/date/variant key.
+    - Serializes concurrent PostgreSQL refreshes with transaction advisory locks.
+    - Updates unsettled picks in place, preserving actual_tip/is_correct.
+    - Retains settled historical picks even when they are no longer selected.
     """
-    from django.db import transaction
+    from django.db import connection, transaction
 
     if TopPick is None:
         return 0
-    all_picks = []
+
+    processed_count = 0
     with transaction.atomic():
         for date_str, picks in (predictions_by_date or {}).items():
             try:
                 match_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-            except Exception:
+            except (TypeError, ValueError):
                 continue
-            TopPick.objects.filter(match_date=match_date, variant=variant).delete()
-            for p in picks:
-                all_picks.append(TopPick(
+
+            # Cron runs every five minutes. If two refreshes overlap, this
+            # transaction-scoped lock prevents delete/insert races for a
+            # particular date and variant on PostgreSQL.
+            if connection.vendor == "postgresql":
+                lock_id = int(match_date.strftime("%Y%m%d")) * 10 + int(variant)
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT pg_advisory_xact_lock(%s)", [lock_id])
+
+            desired = {}
+            for pick in picks or []:
+                home_team = (pick.get("home_team") or "").strip()
+                away_team = (pick.get("away_team") or "").strip()
+                tip = pick.get("tip")
+                if not home_team or not away_team or not tip:
+                    continue
+
+                fixture_key = (home_team, away_team)
+                # First occurrence wins; generators order candidates by score.
+                desired.setdefault(fixture_key, {
+                    "tip": tip,
+                    "confidence": pick.get("confidence", 0),
+                    "odds": pick.get("odds"),
+                })
+
+            existing_rows = list(
+                TopPick.objects.select_for_update().filter(
                     match_date=match_date,
-                    home_team=p["home_team"],
-                    away_team=p["away_team"],
                     variant=variant,
-                    tip=p["tip"],
-                    confidence=p.get("confidence", 0),
-                    odds=p.get("odds"),
-                ))
-        if all_picks:
-            TopPick.objects.bulk_create(all_picks)
-            # Invalidate downstream caches so the mobile app picks up new picks.
+                )
+            )
+            existing_by_fixture = {
+                (row.home_team, row.away_team): row
+                for row in existing_rows
+            }
+
+            to_create = []
+            to_update = []
+            desired_keys = set(desired)
+
+            for (home_team, away_team), values in desired.items():
+                existing = existing_by_fixture.get((home_team, away_team))
+                if existing is None:
+                    to_create.append(TopPick(
+                        match_date=match_date,
+                        home_team=home_team,
+                        away_team=away_team,
+                        variant=variant,
+                        tip=values["tip"],
+                        confidence=values["confidence"],
+                        odds=values["odds"],
+                    ))
+                    continue
+
+                # Never rewrite a settled result or its original prediction.
+                if existing.actual_tip is not None or existing.is_correct is not None:
+                    continue
+
+                existing.tip = values["tip"]
+                existing.confidence = values["confidence"]
+                existing.odds = values["odds"]
+                to_update.append(existing)
+
+            # Remove obsolete unsettled predictions, but retain historical
+            # records that already have an outcome.
+            stale_ids = [
+                row.pk for row in existing_rows
+                if (row.home_team, row.away_team) not in desired_keys
+                and row.actual_tip is None
+                and row.is_correct is None
+            ]
+            if stale_ids:
+                TopPick.objects.filter(pk__in=stale_ids).delete()
+
+            if to_create:
+                TopPick.objects.bulk_create(to_create)
+            if to_update:
+                TopPick.objects.bulk_update(
+                    to_update,
+                    fields=["tip", "confidence", "odds"],
+                )
+
+            processed_count += len(desired)
             cache.delete("top_pick_slip_summary_v1")
-            for date_str in (predictions_by_date or {}):
-                cache.delete(f"summary_v1::{date_str}")
-    return len(all_picks)
+            cache.delete(f"summary_v1::{date_str}")
+
+    return processed_count
 
 
 def update_actuals_for_top_picks(picks_qs):
