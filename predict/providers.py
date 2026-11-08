@@ -205,7 +205,6 @@ def _normalize_fixture(fx):
 
 # ── Public fetch functions (mirror utils/views football-data fetchers) ────────
 
-@_register(providers=["AF"], operation="fetch_matches_by_date")
 def _af_fetch_season_matches(competition_code, season_year):
     """Fetch and cache the season once; date scans then avoid one API call/day."""
     league_id = APIFOOTBALL_LEAGUE_IDS.get(competition_code)
