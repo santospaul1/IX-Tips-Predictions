@@ -558,13 +558,8 @@ def fetch_training_data(competition_code, seasons=None):
     Collect finished matches for a competition across seasons.
     Returns a DataFrame with columns: home_team, away_team, home_goals, away_goals, utc_date
     """
-    if not API_TOKEN:
-        logger.error(
-            "FOOTBALL_DATA_API_KEY is not configured. Training data fetch for %s cannot proceed.",
-            competition_code,
-        )
-        return pd.DataFrame(columns=["home_team", "away_team", "home_goals", "away_goals", "utc_date"])
-
+    # Provider credentials are validated by the selected provider. UK/LF/AF
+    # sources do not require the football-data.org API token.
     if seasons is None:
         seasons = get_default_training_seasons()
     all_matches = []
