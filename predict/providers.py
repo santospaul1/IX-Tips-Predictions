@@ -205,6 +205,7 @@ def _normalize_fixture(fx):
 
 # ── Public fetch functions (mirror utils/views football-data fetchers) ────────
 
+@_register(providers=["AF"], operation="fetch_matches_by_date")
 def af_fetch_matches_by_date(competition_code, match_date):
     """match_date: 'YYYY-MM-DD'. Returns football-data-shaped match dicts."""
     from datetime import datetime
@@ -221,6 +222,7 @@ def af_fetch_matches_by_date(competition_code, match_date):
     return [_normalize_fixture(fx) for fx in rows]
 
 
+@_register(providers=["AF"], operation="fetch_matches_by_season")
 def af_fetch_matches_by_season(competition_code, season_year):
     league_id = APIFOOTBALL_LEAGUE_IDS.get(competition_code)
     if not league_id:
