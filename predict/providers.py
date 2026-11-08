@@ -206,29 +206,35 @@ def _normalize_fixture(fx):
 # ── Public fetch functions (mirror utils/views football-data fetchers) ────────
 
 @_register(providers=["AF"], operation="fetch_matches_by_date")
+def _af_fetch_season_matches(competition_code, season_year):
+    """Fetch and cache the season once; date scans then avoid one API call/day."""
+    league_id = APIFOOTBALL_LEAGUE_IDS.get(competition_code)
+    if not league_id:
+        return []
+    cache_key = f"af_season_fixtures::{competition_code}::{season_year}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+    rows = _af_get("fixtures", {"league": league_id, "season": season_year})
+    matches = [_normalize_fixture(fx) for fx in rows]
+    # Refresh several times per day so newly announced fixtures appear quickly.
+    cache.set(cache_key, matches, timeout=60 * 60 * 6)
+    return matches
+
+
+@_register(providers=["AF"], operation="fetch_matches_by_date")
 def af_fetch_matches_by_date(competition_code, match_date):
     """match_date: 'YYYY-MM-DD'. Returns football-data-shaped match dicts."""
     from datetime import datetime
 
-    league_id = APIFOOTBALL_LEAGUE_IDS.get(competition_code)
-    if not league_id:
-        return []
-    d = datetime.strptime(match_date, "%Y-%m-%d").date()
-    rows = _af_get("fixtures", {
-        "league": league_id,
-        "season": af_season(competition_code, d),
-        "date": match_date,
-    })
-    return [_normalize_fixture(fx) for fx in rows]
+    d = datetime.strptime(str(match_date)[:10], "%Y-%m-%d").date()
+    matches = _af_fetch_season_matches(competition_code, af_season(competition_code, d))
+    return [m for m in matches if (m.get("utcDate") or "")[:10] == str(match_date)[:10]]
 
 
 @_register(providers=["AF"], operation="fetch_matches_by_season")
 def af_fetch_matches_by_season(competition_code, season_year):
-    league_id = APIFOOTBALL_LEAGUE_IDS.get(competition_code)
-    if not league_id:
-        return []
-    rows = _af_get("fixtures", {"league": league_id, "season": season_year})
-    return [_normalize_fixture(fx) for fx in rows]
+    return _af_fetch_season_matches(competition_code, season_year)
 
 
 def af_fetch_scorers(competition_code):
