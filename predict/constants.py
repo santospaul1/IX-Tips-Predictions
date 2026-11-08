@@ -1,4 +1,5 @@
 import os
+import json
 
 from django.core.cache import cache
 from django.conf import settings
@@ -103,11 +104,15 @@ FOOTBALL_DATA_UK_CODES = {
 }
 
 # API-Football numeric league IDs (verified against the account on 2026-05-27).
-APIFOOTBALL_LEAGUE_IDS = {
-    # "MLS": 253,
-    # "LMX": 262,
-    # "SPL": 307,
-}
+# Optional API-Football league IDs can be supplied without a code change:
+# APIFOOTBALL_LEAGUE_IDS='{"BEL": 144, "TUR": 203}'
+try:
+    APIFOOTBALL_LEAGUE_IDS = {
+        str(code).upper(): int(league_id)
+        for code, league_id in json.loads(os.getenv("APIFOOTBALL_LEAGUE_IDS", "{}")).items()
+    }
+except (TypeError, ValueError, json.JSONDecodeError):
+    APIFOOTBALL_LEAGUE_IDS = {}
 
 # AF leagues that run on a single calendar year (season == year). Everything
 # else is treated as a split (Aug–May) season where season == start year.
