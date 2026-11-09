@@ -40,7 +40,19 @@ CSRF_TRUSTED_ORIGINS = [
 ] + ["http://127.0.0.1:8000", "http://localhost:8000"]
 
 CORS_ALLOW_ALL_ORIGINS = DEBUG
-CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if not DEBUG else []
+
+# Empty entries can occur when the environment variable is unset, blank, or
+# contains a trailing comma. django-cors-headers rejects "" as an origin.
+# Strip whitespace and discard empty values before Django's system checks.
+CORS_ALLOWED_ORIGINS = (
+    [
+        origin.strip()
+        for origin in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
+        if origin.strip()
+    ]
+    if not DEBUG
+    else []
+)
 
 # ── Apps ──────────────────────────────────────────────────────────────────────
 
