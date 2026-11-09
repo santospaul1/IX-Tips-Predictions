@@ -32,12 +32,34 @@ SECRET_KEY = os.environ.get(
 
 DEBUG = os.environ.get("DEBUG", "True") == "True"
 
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+    if host.strip()
+]
 
-# Allow Railway and any custom domain
-CSRF_TRUSTED_ORIGINS = [
-    f"https://{h}" for h in ALLOWED_HOSTS if not h.startswith("127") and h != "localhost"
-] + ["http://127.0.0.1:8000", "http://localhost:8000"]
+# HTTPS is enabled only when the deployment explicitly configures it. The
+# Oracle VM currently serves HTTP through Nginx; forcing HTTPS without a TLS
+# listener makes the entire site unreachable.
+USE_HTTPS = os.environ.get("USE_HTTPS", "True").strip().lower() in {
+    "1", "true", "yes", "on"
+}
+
+# Respect explicitly configured origins (including the active HTTP IP origin).
+configured_csrf_origins = os.environ.get("CSRF_TRUSTED_ORIGINS", "").strip()
+if configured_csrf_origins:
+    CSRF_TRUSTED_ORIGINS = [
+        origin.strip()
+        for origin in configured_csrf_origins.split(",")
+        if origin.strip()
+    ]
+else:
+    scheme = "https" if USE_HTTPS else "http"
+    CSRF_TRUSTED_ORIGINS = [
+        f"{scheme}://{host}"
+        for host in ALLOWED_HOSTS
+        if host not in {"127.0.0.1", "localhost"}
+    ] + ["http://127.0.0.1:8000", "http://localhost:8000"]
 
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 
@@ -210,10 +232,13 @@ LOGOUT_REDIRECT_URL = "/login/"
 # ── HTTPS security (production only) ─────────────────────────────────────────
 
 if not DEBUG:
-    SECURE_SSL_REDIRECT = True
-    SECURE_HSTS_SECONDS = 31536000
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = USE_HTTPS
+    SESSION_COOKIE_SECURE = USE_HTTPS
+    CSRF_COOKIE_SECURE = USE_HTTPS
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+    # Only advertise HSTS when HTTPS is actually enabled and served.
+    if USE_HTTPS:
+        SECURE_HSTS_SECONDS = 31536000
+        SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+        SECURE_HSTS_PRELOAD = True
