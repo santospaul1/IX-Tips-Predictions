@@ -161,7 +161,12 @@ jobs:
 
           HEALTHY=0
           for attempt in $(seq 1 24); do
-            STATUS=$(curl --silent --output /dev/null --write-out "%{http_code}" http://127.0.0.1:8000/health/ || true)
+            # The app enforces HTTPS in production. This probe bypasses the public TLS proxy,
+            # so send the trusted proxy header to test the health view without triggering
+            # Django SecurityMiddleware\x27s HTTP-to-HTTPS redirect.
+            STATUS=$(curl --silent --output /dev/null --write-out "%{http_code}" \\
+              --header "X-Forwarded-Proto: https" \\
+              http://127.0.0.1:8000/health/ || true)
             echo "Oracle app health check $attempt/24: HTTP $STATUS"
             if [[ "$STATUS" == "200" ]]; then
               HEALTHY=1
