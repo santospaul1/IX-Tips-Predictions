@@ -216,11 +216,15 @@ def score_top_pick_markets(match_prediction, model_context):
             + (14 if total_goals >= 3.0 else 0)
         ),
         "Under 2.5": _clip_score(
+            # Keep the under-market score on the same scale as result markets.
+            # The previous additive bonuses double-counted low projected goals,
+            # low goal environment, and suppression, pushing routine 1-0 games
+            # close to 100% and drowning out a strongly supported match winner.
             28
-            + 18 * max(0.0, 2.75 - goal_environment)
-            + 14 * goal_suppression
-            + 10 * max(0.0, 0.9 - abs(goal_margin))
-            + (14 if total_goals <= 2.0 else 0)
+            + 8 * max(0.0, 2.75 - goal_environment)
+            + 8 * goal_suppression
+            + 6 * max(0.0, 0.9 - abs(goal_margin))
+            + (8 if total_goals <= 2.0 else 0)
         ),
         "GG": _clip_score(
             26
