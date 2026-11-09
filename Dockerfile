@@ -6,8 +6,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # supercronic — lightweight cron runner (replaces Celery beat)
 ENV SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/v0.2.33/supercronic-linux-amd64
-RUN curl -fsSLo /usr/local/bin/supercronic "$SUPERCRONIC_URL" \
-    && chmod +x /usr/local/bin/supercronic
+RUN curl --fail --show-error --location \
+    --retry 5 --retry-all-errors --retry-delay 2 --retry-max-time 120 \
+    --output /tmp/supercronic "$SUPERCRONIC_URL" \
+    && install -m 0755 /tmp/supercronic /usr/local/bin/supercronic \
+    && rm -f /tmp/supercronic
 
 WORKDIR /code
 
