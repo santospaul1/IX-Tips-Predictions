@@ -1774,6 +1774,13 @@ def normalize_display_team_name(name, fallback=None, max_length=14):
     words = []
     for raw_word in candidate.split():
         raw_upper = raw_word.upper()
+
+        # Keep connector words lowercase so long names abbreviate naturally
+        # (for example, "Brighton and Hove Albion" -> "B. a. H. Albion").
+        if raw_word.lower() == "and":
+            words.append("and")
+            continue
+
         if raw_upper in drop_words:
             continue
         if raw_word in preserved_tokens or raw_upper in preserved_tokens:
