@@ -151,7 +151,22 @@ jobs:
           }
           trap rollback EXIT
 
+          # The Oracle VM has limited disk. Keep the currently deployed images
+          # (tagged as rollback above), but discard disposable build cache and
+          # untagged images before loading the next archive. Never prune volumes.
+          echo "Disk usage before Docker cleanup:"
+          df -h "$PROJECT_DIR"
+          docker system df
+          docker builder prune --all --force
+          docker image prune --force
+          echo "Disk usage after Docker cleanup:"
+          df -h "$PROJECT_DIR"
+          docker system df
+
           docker load --input "$IMAGE_ARCHIVE"
+          # The loaded image is now stored by Docker; remove the duplicate tar
+          # archive from the runner workspace to release its disk space.
+          rm -f "$IMAGE_ARCHIVE"
 
           # Apply schema changes before replacing the currently serving app.
           "${COMPOSE[@]}" run --rm --no-deps app python manage.py migrate --noinput
