@@ -69,6 +69,8 @@ class TopPick(models.Model):
         ("3", "Running Bet"),
         ("4", "Mshipi"),
         ("5", "12"),
+        ("6", "GG"),
+        ("7", "Over 2.5"),
     )
 
     match_date = models.DateField(db_index=True)
