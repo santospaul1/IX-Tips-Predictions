@@ -256,17 +256,17 @@ def _refresh_live_match_data_impl():
             )
             prediction_updates += len(updated_rows)
 
-    # Score each upcoming fixture once. Standard variants use the top four
-    # ranked markets; Mshipi and daily market slips use all six.
-    rank_six_candidates = _collect_top_pick_candidates(rank_limit=6)
+    # Score each upcoming fixture once. Standard variants use the top four;
+    # 12, GG, Over 2.5 and Mshipi can inspect the full ranked market list.
+    rank_all_candidates = _collect_top_pick_candidates(rank_limit=12)
     rank_four_candidates = {
         date_str: [candidate for candidate in candidates if candidate["rank_index"] < 4]
-        for date_str, candidates in rank_six_candidates.items()
+        for date_str, candidates in rank_all_candidates.items()
     }
 
     stored_top_picks = {}
     for variant in ("1", "2", "3", "4", "5", "6", "7"):
-        candidates = rank_six_candidates if variant in {"4", "5", "6", "7"} else rank_four_candidates
+        candidates = rank_all_candidates if variant in {"4", "5", "6", "7"} else rank_four_candidates
         limit = 20 if variant == "4" else (12 if variant in {"5", "6", "7"} else 10)
         top_predictions = get_top_predictions_for_variant(
             limit=limit,
