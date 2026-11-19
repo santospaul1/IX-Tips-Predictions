@@ -179,10 +179,35 @@ def refresh_daily_odds_cache():
 
 @shared_task
 def refresh_live_match_data():
-    """
-    Refresh live match status, actual scores, cached kickoff metadata, odds, and top picks.
-    Runs in the background so the UI does not need to do the expensive refresh itself.
-    """
+    """Run one live refresh at a time; stale locks expire after fifteen minutes."""
+    lock_key = "task_lock::refresh_live_match_data"
+    try:
+        acquired = cache.add(lock_key, True, timeout=15 * 60)
+    except Exception:
+        logger.exception("Could not acquire live refresh lock; continuing without lock")
+        acquired = False
+    if not acquired:
+        # Distinguish a cache outage from another active run: the cache.add
+        # failure path above also reaches here, but the task should still work.
+        try:
+            if cache.get(lock_key):
+                logger.info("Skipping live refresh because a previous run is still active")
+                return {"status": "skipped", "reason": "already_running"}
+        except Exception:
+            pass
+        acquired = True
+    try:
+        return _refresh_live_match_data_impl()
+    finally:
+        if acquired:
+            try:
+                cache.delete(lock_key)
+            except Exception:
+                logger.warning("Could not release live refresh lock")
+
+
+def _refresh_live_match_data_impl():
+    """Refresh statuses, unfinished predictions and daily top-pick markets."""
     from .views import refresh_prediction_statuses
 
     from datetime import timedelta
