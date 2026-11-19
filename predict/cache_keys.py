@@ -11,6 +11,10 @@ Usage:
     cache.set(CacheKeys.team_meta("Arsenal"), {...}, timeout=CacheKeys.TTL_TEAM_META)
 """
 
+import hashlib
+import json
+
+
 # ── TTL constants ─────────────────────────────────────────────────────────────
 
 TTL = type("TTL", (), {
@@ -62,7 +66,13 @@ class CacheKeys:
 
     @staticmethod
     def fixture_meta(comp_code, match_date, home, away):
-        return f"fixture_meta::{comp_code}::{match_date}::{home}::{away}"
+        identity = json.dumps(
+            [str(comp_code or ""), str(match_date or ""), str(home or ""), str(away or "")],
+            ensure_ascii=True,
+            separators=(",", ":"),
+        )
+        digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+        return f"fixture_meta:v1:{digest}"
 
     @staticmethod
     def fixture_refresh(comp_code, match_date):
@@ -78,12 +88,12 @@ class CacheKeys:
     def competition_odds_refresh(comp_code):
         return f"competition_odds_refresh::{comp_code}"
 
-    # ── Scorers ───────────────────────────────────────────────────────────────
+    # ── Scorers ────────────────────────────────────────────────────────────────
     @staticmethod
     def competition_scorers(comp_code):
         return f"competition_scorers::{comp_code}"
 
-    # ── Combo slips ───────────────────────────────────────────────────────────
+    # ── Combo slips ──────────────────────────────────────────────────────────
     @staticmethod
     def combo_tracking_summary():
         return "combo_slip_tracking_summary_v1"
@@ -92,7 +102,7 @@ class CacheKeys:
     def recent_combo_slips(limit):
         return f"recent_saved_combo_slips_v2::{limit}"
 
-    # ── Provider-specific (LF / UK) ───────────────────────────────────────────
+    # ── Provider-specific (LF / UK) ──────────────────────────────────────────
     @staticmethod
     def lf_season_matches(comp_code):
         return f"lf_season_matches::{comp_code}"
