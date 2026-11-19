@@ -2,7 +2,9 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from predict.fixture_sources import _provider_order
-from predict.utils import fetch_training_data
+from predict.utils import fetch_training_data, get_12_predictions, get_daily_market_predictions
+from predict.constants import COMPETITIONS, OPEN_MATCHDAY_COMPETITIONS
+from django.utils import timezone
 from predict.providers import (
     _om_row_to_match,
     om_fetch_matches_by_date,
@@ -140,3 +142,56 @@ class OpenMatchdayTrainingMergeTests(TestCase):
 
         self.assertEqual(len(df), 1)
         self.assertEqual(df.iloc[0]["home_goals"], 4)
+
+
+class OpenMatchdayCoverageAndDailyPickTests(TestCase):
+    def test_all_75_open_matchday_competitions_are_registered(self):
+        self.assertEqual(len(OPEN_MATCHDAY_COMPETITIONS), 75)
+        self.assertTrue(set(OPEN_MATCHDAY_COMPETITIONS).issubset(set(COMPETITIONS)))
+
+    def test_twelve_picks_are_limited_to_today_and_capped_at_twelve(self):
+        today = timezone.localdate().isoformat()
+        tomorrow = (timezone.localdate() + __import__("datetime").timedelta(days=1)).isoformat()
+        candidates = {
+            today: [
+                {
+                    "home_team": f"Home {i}", "away_team": f"Away {i}",
+                    "tip": "1" if i % 2 else "2",
+                    "confidence_value": 90 - i, "rank_index": 0,
+                    "odds": None,
+                }
+                for i in range(13)
+            ],
+            tomorrow: [{
+                "home_team": "Tomorrow FC", "away_team": "Future FC",
+                "tip": "1", "confidence_value": 99, "rank_index": 0,
+                "odds": None,
+            }],
+        }
+
+        picks = get_12_predictions(candidates_by_date=candidates)
+
+        self.assertEqual(list(picks), [today])
+        self.assertEqual(len(picks[today]), 12)
+        self.assertTrue(all(item["match_date"] == today for item in picks[today]))
+
+    def test_daily_market_lists_only_return_the_requested_market_for_today(self):
+        today = timezone.localdate().isoformat()
+        tomorrow = (timezone.localdate() + __import__("datetime").timedelta(days=1)).isoformat()
+        candidates = {
+            today: [
+                {"home_team": "A", "away_team": "B", "tip": "GG", "confidence_value": 87, "rank_index": 0},
+                {"home_team": "C", "away_team": "D", "tip": "Over 2.5", "confidence_value": 82, "rank_index": 1},
+            ],
+            tomorrow: [
+                {"home_team": "E", "away_team": "F", "tip": "GG", "confidence_value": 99, "rank_index": 0},
+            ],
+        }
+
+        gg = get_daily_market_predictions("GG", candidates_by_date=candidates)
+        over = get_daily_market_predictions("Over 2.5", candidates_by_date=candidates)
+
+        self.assertEqual([item["tip"] for item in gg[today]], ["GG"])
+        self.assertEqual([item["tip"] for item in over[today]], ["Over 2.5"])
+        self.assertEqual(len(gg[today]), 1)
+        self.assertEqual(len(over[today]), 1)
