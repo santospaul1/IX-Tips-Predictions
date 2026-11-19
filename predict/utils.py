@@ -2256,7 +2256,9 @@ def attach_odds_to_predictions(match_predictions, odds_list):
 
 def _collect_top_pick_candidates(rank_limit=4):
     today = date.today()
-    matches = MatchPrediction.objects.select_related("odds").filter(match_date__gte=today).order_by("match_date")
+    matches = MatchPrediction.objects.select_related("odds").filter(
+        match_date__gte=today,
+    ).exclude(status__in=["FINISHED", "POSTPONED", "CANCELLED"]).order_by("match_date")
 
     picks_by_date_candidates = defaultdict(list)
     model_bundles = {}
