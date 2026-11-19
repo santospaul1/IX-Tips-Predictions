@@ -195,3 +195,30 @@ class OpenMatchdayCoverageAndDailyPickTests(TestCase):
         self.assertEqual([item["tip"] for item in over[today]], ["Over 2.5"])
         self.assertEqual(len(gg[today]), 1)
         self.assertEqual(len(over[today]), 1)
+
+
+
+class SafeFixtureCacheKeyTests(TestCase):
+    def test_fixture_metadata_key_is_safe_and_bounded(self):
+        from predict.cache_keys import CacheKeys
+
+        key = CacheKeys.fixture_meta(
+            "PL", "2026-12-12", "Ipswich Town FC", "Newcastle United FC"
+        )
+
+        self.assertRegex(key, r"^fixture_meta:v1:[0-9a-f]{64}$")
+        self.assertLessEqual(len(key), 100)
+        self.assertNotIn(" ", key)
+        self.assertNotIn("::", key)
+
+    def test_fixture_metadata_key_is_deterministic_and_input_sensitive(self):
+        from predict.cache_keys import CacheKeys
+
+        key = CacheKeys.fixture_meta("PL", "2026-12-12", "Team A", "Team B")
+
+        self.assertEqual(
+            key, CacheKeys.fixture_meta("PL", "2026-12-12", "Team A", "Team B")
+        )
+        self.assertNotEqual(
+            key, CacheKeys.fixture_meta("PL", "2026-12-12", "Team A", "Team C")
+        )
