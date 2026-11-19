@@ -155,9 +155,10 @@ def update_metadata_task():
 @shared_task
 def store_daily_top_pick():
     stored = {}
-    for variant in ("1", "2", "3", "4"):
+    for variant in ("1", "2", "3", "4", "5", "6", "7"):
         # (delete now handled atomically inside store_top_pick_for_date)
-        predictions = get_top_predictions_for_variant(limit=(20 if variant == "4" else 10), variant=variant)
+        limit = 20 if variant == "4" else (12 if variant in {"5", "6", "7"} else 10)
+        predictions = get_top_predictions_for_variant(limit=limit, variant=variant)
         stored[variant] = store_top_pick_for_date(predictions, variant=variant)
     return stored
 
@@ -167,9 +168,9 @@ def refresh_daily_odds_cache():
 
     updated = update_all_odds()
     stored_top_picks = {}
-    for variant in ("1", "2", "3", "4"):
-        # (delete now handled atomically inside store_top_pick_for_date)
-        top_predictions = get_top_predictions_for_variant(limit=(20 if variant == "4" else 10), variant=variant)
+    for variant in ("1", "2", "3", "4", "5", "6", "7"):
+        limit = 20 if variant == "4" else (12 if variant in {"5", "6", "7"} else 10)
+        top_predictions = get_top_predictions_for_variant(limit=limit, variant=variant)
         stored_top_picks[variant] = store_top_pick_for_date(top_predictions, variant=variant)
     return {
         "odds_updates": updated,
@@ -201,9 +202,37 @@ def refresh_live_match_data():
             continue
         status_updates += refresh_prediction_statuses(competition, match_date, force=True)
 
+    # Recalculate every unfinished prediction with the already-cached model.
+    # Settled matches are excluded here and protected again in save_predictions.
+    unfinished = MatchPrediction.objects.filter(
+        match_date__gte=today,
+        status__in=["TIMED", "LIVE"],
+    ).order_by("competition", "match_date")
+    grouped_unfinished = {}
+    for prediction in unfinished:
+        grouped_unfinished.setdefault(prediction.competition, []).append(prediction)
+
+    prediction_updates = 0
+    for competition, rows in grouped_unfinished.items():
+        bundle = get_or_train_model_bundle(competition)
+        if not bundle or len(bundle) != 3:
+            continue
+        matches = [{
+            "id": row.match_id,
+            "utcDate": row.match_date.isoformat(),
+            "status": row.status,
+            "homeTeam": {"name": row.home_team},
+            "awayTeam": {"name": row.away_team},
+        } for row in rows if row.match_id]
+        if matches:
+            updated_rows = save_predictions(
+                matches, bundle[0], bundle[1], bundle[2],
+                competition_code=competition,
+            )
+            prediction_updates += len(updated_rows)
+
     # Score each upcoming fixture once. Standard variants use the top four
-    # ranked markets; Mshipi can use all six. This avoids repeating model
-    # scoring four times during every live refresh.
+    # ranked markets; Mshipi and daily market slips use all six.
     rank_six_candidates = _collect_top_pick_candidates(rank_limit=6)
     rank_four_candidates = {
         date_str: [candidate for candidate in candidates if candidate["rank_index"] < 4]
@@ -211,10 +240,11 @@ def refresh_live_match_data():
     }
 
     stored_top_picks = {}
-    for variant in ("1", "2", "3", "4"):
-        candidates = rank_six_candidates if variant == "4" else rank_four_candidates
+    for variant in ("1", "2", "3", "4", "5", "6", "7"):
+        candidates = rank_six_candidates if variant in {"4", "5", "6", "7"} else rank_four_candidates
+        limit = 20 if variant == "4" else (12 if variant in {"5", "6", "7"} else 10)
         top_predictions = get_top_predictions_for_variant(
-            limit=20 if variant == "4" else 10,
+            limit=limit,
             variant=variant,
             candidates_by_date=candidates,
         )
@@ -222,6 +252,8 @@ def refresh_live_match_data():
 
     return {
         "status_updates": status_updates,
+        "prediction_updates": prediction_updates,
+        "unfinished_fixtures_checked": sum(len(rows) for rows in grouped_unfinished.values()),
         "stored_top_picks": stored_top_picks,
         "dates_checked": [str(entry["match_date"]) for entry in refresh_pairs],
     }
