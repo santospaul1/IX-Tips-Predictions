@@ -78,14 +78,7 @@ COMPETITIONS = {
     "SVK": "Slovak Nike Liga", "SVN": "Slovenian Prva Liga", "KAZ": "Kazakhstan Premier League",
     "NED2": "Eerste Divisie", "BRA2": "Brasileirão Série B",
     "ARG2": "Primera Nacional", "MEX2": "Liga de Expansión MX", "AUS": "A-Leagues",
-    "UEL": "UEFA Europa League", "UECL": "UEFA Conference League",
-    "ENG6N": "National League North", "ENG7": "Northern Premier League",
-    "DEN": "Danish Superliga", "IRE1": "League of Ireland First Division",
-    "POL1": "I Liga", "POL2": "II Liga", "WAL1": "Cymru Premier",
-    "WAL2": "Cymru North", "CRO": "Croatian HNL", "CZE": "Czech Chance Liga",
-    "CYP": "Cyprus First Division", "SVN": "Slovenian Prva Liga",
-    "KAZ": "Kazakhstan Premier League", "BRA2": "Brasileirão Série B",
-    "MEX2": "Liga de Expansión MX"
+    "UEL": "UEFA Europa League", "UECL": "UEFA Conference League"
 }
 
 # Which provider serves each competition. Anything not listed defaults to "FD".
