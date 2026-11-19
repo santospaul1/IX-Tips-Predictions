@@ -2514,7 +2514,7 @@ def get_12_predictions(limit=12, candidates_by_date=None):
     today = timezone.localdate()
     today_key = today.strftime("%Y-%m-%d")
     if candidates_by_date is None:
-        candidates_by_date = _collect_top_pick_candidates(rank_limit=6)
+        candidates_by_date = _collect_top_pick_candidates(rank_limit=12)
     candidates = []
     for date_str, day_candidates in candidates_by_date.items():
         if date_str != today_key:
