@@ -6,7 +6,7 @@ from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
-from .constants import COMPETITIONS, TRAINING_CACHE_TIMEOUT
+from .constants import COMPETITIONS
 from .models import MatchPrediction, TopPick
 from .fixture_sources import fetch_fixture_matches_by_date, fetch_upcoming_fixture_groups
 from .utils import (
@@ -60,8 +60,8 @@ def predict_next_fixtures_for_competition(competition_code, match_date=None):
 
     df = cache.get(f"training_data_{competition_code}")
     if df is None:
+        # fetch_training_data_all_seasons owns the provider-specific cache TTL.
         df = fetch_training_data_all_seasons(competition_code)
-        cache.set(f"training_data_{competition_code}", df, timeout=TRAINING_CACHE_TIMEOUT)
 
     training_entries = len(df) if df is not None else 0
     if df is None or df.empty:
