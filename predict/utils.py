@@ -2255,7 +2255,7 @@ def attach_odds_to_predictions(match_predictions, odds_list):
 
 
 def _collect_top_pick_candidates(rank_limit=4):
-    today = date.today()
+    today = timezone.localdate()
     matches = MatchPrediction.objects.select_related("odds").filter(
         match_date__gte=today,
     ).exclude(status__in=["FINISHED", "POSTPONED", "CANCELLED"]).order_by("match_date")
