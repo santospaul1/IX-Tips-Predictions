@@ -356,6 +356,8 @@
       <a href="?variant=3{% if filter_label %}&filter={{ filter_label|urlencode }}{% endif %}" class="variant-pill {% if variant == '3' %}active variant-3{% endif %}">Running Bet</a>
       <a href="?variant=4{% if filter_label %}&filter={{ filter_label|urlencode }}{% endif %}" class="variant-pill {% if variant == '4' %}active variant-4{% endif %}">Mshipi</a>
       <a href="?variant=5{% if filter_label %}&filter={{ filter_label|urlencode }}{% endif %}" class="variant-pill {% if variant == '5' %}active variant-5{% endif %}">12</a>
+      <a href="?variant=6" class="variant-pill {% if variant == '6' %}active{% endif %}">GG</a>
+      <a href="?variant=7" class="variant-pill {% if variant == '7' %}active{% endif %}">Over 2.5</a>
     </div>
   </div>
 </div>
@@ -368,7 +370,7 @@
   <div class="toolbar">
     <input type="text" id="date-picker" name="match_date" placeholder="Date"
            class="date-input" value="{{ selected_date|date:'Y-m-d' }}" readonly
-           {% if variant == '3' or variant == '4' %}disabled{% endif %}>
+           {% if variant == '3' or variant == '4' or variant == '5' or variant == '6' or variant == '7' %}disabled{% endif %}>
     <select name="filter" class="select-input" onchange="document.getElementById('filter-form').submit()">
       <option value="">All Tips</option>
       <option value="1" {% if filter_label == "1" %}selected{% endif %}>Home Win (1)</option>
@@ -429,7 +431,11 @@
   {% if not prediction and variant == '4' %}
     <div class="empty-state">Mshipi is published only when 20 valid selections are available. Please check again when more fixtures are covered.</div>
   {% elif not prediction and variant == '5' %}
-    <div class="empty-state">The 12 slip needs 10 unique home/away win selections. It will appear when enough fixtures are available.</div>
+    <div class="empty-state">The 12 slip shows up to 12 unique home/away win selections for today. Fewer are shown when fewer fixtures qualify.</div>
+  {% elif not prediction and variant == '6' %}
+    <div class="empty-state">No qualifying GG fixtures are available for today yet.</div>
+  {% elif not prediction and variant == '7' %}
+    <div class="empty-state">No qualifying Over 2.5 fixtures are available for today yet.</div>
   {% endif %}
   {% if prediction %}
     <div style="overflow-x:auto;">
