@@ -93,7 +93,7 @@ class TopPick(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["match_date", "home_team", "away_team", "variant"],
-                condition=models.Q(variant__in=["1", "2", "5"]),
+                condition=models.Q(variant__in=["1", "2", "5", "6", "7"]),
                 name="unique_regular_top_pick_fixture_variant",
             ),
             models.UniqueConstraint(
