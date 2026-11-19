@@ -108,7 +108,7 @@ COMPETITION_PROVIDERS = {
     "POL2": "OM", "BELU21": "OM", "WAL1": "OM", "WAL2": "OM", "WAL3": "OM",
     "CRO": "OM", "CZE": "OM", "UKR": "OM", "CYP": "OM", "SVK": "OM",
     "SVN": "OM", "NED2": "OM", "BRA2": "OM", "ARG2": "OM", "MEX2": "OM",
-    "AUS": "OM",
+    "AUS": "OM", "UEL": "OM", "UECL": "OM", "KAZ": "OM",
 }
 
 # football-data.co.uk mapping: our code -> (kind, fduk_code).
@@ -263,7 +263,7 @@ COMPETITION_COUNTRY = {
     "BELU21": "be", "WAL1": "gb-wls", "WAL2": "gb-wls", "WAL3": "gb-wls",
     "CRO": "hr", "CZE": "cz", "UKR": "ua", "CYP": "cy", "SVK": "sk",
     "SVN": "si", "KAZ": "kz", "NED2": "nl", "BRA2": "br", "ARG2": "ar",
-    "MEX2": "mx", "AUS": "au",
+    "MEX2": "mx", "AUS": "au", "UEL": "eu", "UECL": "eu",
 }
 
 
