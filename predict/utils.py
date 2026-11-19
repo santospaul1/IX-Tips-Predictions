@@ -2047,6 +2047,26 @@ def save_predictions(matches, model_home=None, model_away=None, le=None, match_d
             odds_away = None
 
             if use_db:
+                existing = (
+                    MatchPrediction.objects.filter(match_id=match_id).first()
+                    if match_id else None
+                )
+                # A later fixture/training refresh must never turn a settled
+                # result back into TIMED or replace its final prediction.
+                if existing and existing.status == "FINISHED":
+                    saved.append(existing)
+                    continue
+                incoming_status = match.get("status")
+                if existing:
+                    if incoming_status in {"FINISHED", "AWARDED"}:
+                        saved_status = "FINISHED"
+                    elif existing.status in {"LIVE", "POSTPONED", "SUSPENDED", "CANCELLED"}:
+                        saved_status = existing.status
+                    else:
+                        saved_status = incoming_status or existing.status or "TIMED"
+                else:
+                    saved_status = incoming_status or "TIMED"
+
                 obj, created = MatchPrediction.objects.update_or_create(
                     match_id=match_id,
                     defaults={
@@ -2068,7 +2088,7 @@ def save_predictions(matches, model_home=None, model_away=None, le=None, match_d
                         "odds_home": odds_home,
                         "odds_draw": odds_draw,
                         "odds_away": odds_away,
-                        "status": "TIMED",
+                        "status": saved_status,
                     }
                 )
                 # If actual_result_map provided and contains this fixture, update actuals & accuracy
@@ -2487,37 +2507,82 @@ def get_mshipi_predictions(limit=20, candidates_by_date=None):
     return dict(grouped)
 
 
-def get_12_predictions(limit=10):
-    """Build ten unique straight-result picks; draw selections are excluded."""
-    candidates_by_date = _collect_top_pick_candidates(rank_limit=6)
+def get_12_predictions(limit=12, candidates_by_date=None):
+    """Build up to twelve unique 1/X2 win selections for today's Nairobi date."""
+    today = timezone.localdate()
+    today_key = today.strftime("%Y-%m-%d")
+    if candidates_by_date is None:
+        candidates_by_date = _collect_top_pick_candidates(rank_limit=6)
     candidates = []
     for date_str, day_candidates in candidates_by_date.items():
+        if date_str != today_key:
+            continue
         for candidate in day_candidates:
             if candidate.get("tip") not in {"1", "2"}:
                 continue
             confidence = float(candidate.get("confidence_value") or candidate.get("confidence") or 0)
-            candidates.append({**candidate, "match_date": date_str, "confidence_value": confidence})
-    candidates.sort(key=lambda item: (item["confidence_value"], item["match_date"]), reverse=True)
+            candidates.append({**candidate, "match_date": today_key, "confidence_value": confidence})
+    candidates.sort(key=lambda item: (item["confidence_value"], -item.get("rank_index", 0)), reverse=True)
     selected, seen = [], set()
     for candidate in candidates:
-        key = (candidate["match_date"], candidate["home_team"], candidate["away_team"])
+        key = (candidate["home_team"], candidate["away_team"])
         if key in seen:
             continue
         selected.append(candidate)
         seen.add(key)
-        if len(selected) == 10:
+        if len(selected) >= min(12, max(1, int(limit))):
             break
-    if len(selected) < 10:
-        logger.info("12 picks not generated: only %s/10 unique win selections available", len(selected))
+    if len(selected) < 12:
+        logger.info("12 slip has %s/12 qualifying fixtures for %s", len(selected), today_key)
+    if not selected:
         return {}
-    grouped = defaultdict(list)
-    for item in selected:
-        grouped[item["match_date"]].append({
+    return {today_key: [
+        {
             "home_team": item["home_team"], "away_team": item["away_team"],
             "tip": item["tip"], "confidence": f"{item['confidence_value']:.0f}",
-            "match_date": item["match_date"], "odds": item.get("odds"),
-        })
-    return dict(grouped)
+            "match_date": today_key, "odds": item.get("odds"),
+        }
+        for item in selected
+    ]}
+
+
+def get_daily_market_predictions(market, limit=12, candidates_by_date=None):
+    """Return today's highest-confidence unique fixtures for one goal market."""
+    today_key = timezone.localdate().strftime("%Y-%m-%d")
+    if candidates_by_date is None:
+        candidates_by_date = _collect_top_pick_candidates(rank_limit=6)
+    candidates = []
+    for date_str, day_candidates in candidates_by_date.items():
+        if date_str != today_key:
+            continue
+        for candidate in day_candidates:
+            if candidate.get("tip") != market:
+                continue
+            candidates.append({
+                **candidate,
+                "match_date": today_key,
+                "confidence_value": float(candidate.get("confidence_value") or candidate.get("confidence") or 0),
+            })
+    candidates.sort(key=lambda item: item["confidence_value"], reverse=True)
+    selected, seen = [], set()
+    for item in candidates:
+        key = (item["home_team"], item["away_team"])
+        if key in seen:
+            continue
+        selected.append(item)
+        seen.add(key)
+        if len(selected) >= max(1, int(limit)):
+            break
+    if not selected:
+        return {}
+    return {today_key: [{
+        "home_team": item["home_team"],
+        "away_team": item["away_team"],
+        "tip": market,
+        "confidence": f"{item['confidence_value']:.0f}",
+        "match_date": today_key,
+        "odds": item.get("odds"),
+    } for item in selected]}
 
 
 def get_top_predictions_for_variant(limit=10, variant="1", candidates_by_date=None):
@@ -2527,7 +2592,11 @@ def get_top_predictions_for_variant(limit=10, variant="1", candidates_by_date=No
     if variant == "4":
         return get_mshipi_predictions(limit=max(limit, 20), candidates_by_date=candidates_by_date)
     if variant == "5":
-        return get_12_predictions(limit=10)
+        return get_12_predictions(limit=12, candidates_by_date=candidates_by_date)
+    if variant == "6":
+        return get_daily_market_predictions("GG", limit=limit, candidates_by_date=candidates_by_date)
+    if variant == "7":
+        return get_daily_market_predictions("Over 2.5", limit=limit, candidates_by_date=candidates_by_date)
     return get_top_predictions(limit=limit, variant=int(variant), candidates_by_date=candidates_by_date)
 
 
