@@ -773,8 +773,8 @@ def top_picks_view(request):
         picks_qs = picks_qs[:10]
     elif variant == "4":
         picks_qs = picks_qs[:20]
-    elif variant == "5":
-        picks_qs = picks_qs[:10]
+    elif variant in {"5", "6", "7"}:
+        picks_qs = picks_qs[:12]
 
     picks = list(
         picks_qs.values(
@@ -1466,20 +1466,19 @@ def regenerate_top_picks(request):
     if variant in {"3", "4"}:
         prediction_count = MatchPrediction.objects.filter(match_date__gte=timezone.localdate()).count()
     else:
-        prediction_count = MatchPrediction.objects.filter(match_date=match_date).count()
+        prediction_count = MatchPrediction.objects.filter(match_date=match_date).exclude(status="FINISHED").count()
 
     if prediction_count == 0:
         return redirect(f"{reverse('top_picks')}?match_date={target_date}&variant={variant}")
 
-    generation_limit = 20 if variant == "4" else 10
-    predictions_by_date = get_top_predictions(limit=generation_limit, variant=variant)
+    generation_limit = 20 if variant == "4" else (12 if variant in {"5", "6", "7"} else 10)
+    predictions_by_date = get_top_predictions_for_variant(limit=generation_limit, variant=variant)
     if variant in {"3", "4"}:
-        TopPick.objects.filter(variant=variant, match_date__gte=timezone.localdate()).delete()
         store_top_pick_for_date(predictions_by_date, variant=variant)
         return redirect(f"{reverse('top_picks')}?variant={variant}")
 
     if target_date in predictions_by_date:
-        TopPick.objects.filter(match_date=match_date, variant=variant).delete()
+        # The store helper updates unsettled picks in place and preserves settled history.
         store_top_pick_for_date({target_date: predictions_by_date[target_date]}, variant=variant)
         return redirect(f"{reverse('top_picks')}?match_date={target_date}&variant={variant}")
     return redirect(f"{reverse('top_picks')}?match_date={target_date}&variant={variant}")
@@ -3245,10 +3244,9 @@ def actual_results_view(request):
 
 
 def refresh_top_picks(request):
-    today = date.today()
-    for variant in ("1", "2", "3", "4"):
-        TopPick.objects.filter(variant=variant, match_date__gte=today).delete()
-        top_predictions = get_top_predictions(limit=(20 if variant == "4" else 10), variant=variant)
+    for variant in ("1", "2", "3", "4", "5", "6", "7"):
+        limit = 20 if variant == "4" else (12 if variant in {"5", "6", "7"} else 10)
+        top_predictions = get_top_predictions_for_variant(limit=limit, variant=variant)
         store_top_pick_for_date(top_predictions, variant=variant)
     return redirect("top-picks_view")
 
@@ -3256,7 +3254,7 @@ def refresh_top_picks(request):
 def export_top_picks(request, format):
     match_date_str = request.GET.get("match_date")
     variant = request.GET.get("variant", "1")
-    variant = variant if variant in {"1", "2", "3", "4"} else "1"
+    variant = variant if variant in {"1", "2", "3", "4", "5", "6", "7"} else "1"
 
     if variant in {"3", "4", "5", "6", "7"} and not match_date_str:
         match_date = timezone.localdate()
