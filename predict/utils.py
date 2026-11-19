@@ -2552,7 +2552,7 @@ def get_daily_market_predictions(market, limit=12, candidates_by_date=None):
     """Return today's highest-confidence unique fixtures for one goal market."""
     today_key = timezone.localdate().strftime("%Y-%m-%d")
     if candidates_by_date is None:
-        candidates_by_date = _collect_top_pick_candidates(rank_limit=6)
+        candidates_by_date = _collect_top_pick_candidates(rank_limit=12)
     candidates = []
     for date_str, day_candidates in candidates_by_date.items():
         if date_str != today_key:
