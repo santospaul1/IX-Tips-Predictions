@@ -28,6 +28,7 @@ from celery import current_app
 from django_celery_beat.models import PeriodicTask
 
 from .models import ComboSlip, ComboSlipLeg, MatchOdds, MatchPrediction, TopPick, SlipBatch
+from .cache_keys import CacheKeys
 from .forms import ActualResultForm, PredictionForm, LivePredictionForm
 from .constants import API_TOKEN, COMPETITIONS, ODDS_API_KEY as SETTINGS_ODDS_API_KEY, country_flag_url, get_team_metadata
 from .utils import (
@@ -199,7 +200,7 @@ def competition_odds_refresh_cache_key(competition_code):
 
 
 def fixture_meta_cache_key(competition_code, match_date, home_team, away_team):
-    return f"fixture_meta::{competition_code}::{match_date}::{home_team}::{away_team}"
+    return CacheKeys.fixture_meta(competition_code, match_date, home_team, away_team)
 
 
 def format_kickoff_time(utc_date):
