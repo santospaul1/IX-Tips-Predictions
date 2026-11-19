@@ -179,10 +179,10 @@ def refresh_daily_odds_cache():
 
 @shared_task
 def refresh_live_match_data():
-    """Run one live refresh at a time; stale locks expire after fifteen minutes."""
+    """Run one live refresh at a time; stale locks expire after one hour."""
     lock_key = "task_lock::refresh_live_match_data"
     try:
-        acquired = cache.add(lock_key, True, timeout=15 * 60)
+        acquired = cache.add(lock_key, True, timeout=60 * 60)
     except Exception:
         logger.exception("Could not acquire live refresh lock; continuing without lock")
         acquired = False
