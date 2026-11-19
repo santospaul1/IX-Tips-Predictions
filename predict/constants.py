@@ -130,7 +130,8 @@ FOOTBALL_DATA_UK_CODES = {
 
 # open-matchday (OM) — public daily CSV compilation for non-commercial use.
 # Exact folder names from the open-matchday competition index.
-# The feed currently publishes the current season only; it is a fallback source.
+# The feed publishes the current season only; it supplements existing providers
+# and is primary for competitions without another configured provider.
 OPEN_MATCHDAY_COMPETITIONS = {
     "PL": "ENG_1_premier-league",
     "PD": "ESP_1_la-liga",
