@@ -101,6 +101,18 @@ class CachedMetadataLogoFallbackTests(TestCase):
 
 
 class TeamLogoDashboardTests(TestCase):
+    def test_competition_logo_ignores_stale_256_catalogue_cache(self):
+        from django.test import override_settings
+        from predict.views import resolve_competition_logo
+
+        stale = "https://assets.football-logos.cc/logos/belgium/256x256/jupiler-pro-league.hash.png"
+        current = "https://assets.football-logos.cc/logos/belgium/512x512/jupiler-pro-league.hash.png"
+        with patch("predict.views.os.path.exists", return_value=False):
+            with patch("predict.views.cache.get", return_value={"crest": stale}):
+                with patch("predict.views.get_football_competition_logo_url", return_value=current):
+                    self.assertEqual(resolve_competition_logo("BEL"), current)
+
+
     def test_displays_standings_teams_and_resolved_logo_metadata(self):
         from django.test import RequestFactory
         from predict.views import team_logos_preview
@@ -121,6 +133,8 @@ class TeamLogoDashboardTests(TestCase):
         self.assertIn("catalog-crest.png", rendered)
         self.assertIn("provider-crest.png", rendered)
         self.assertIn("Source: catalogue", rendered)
+        self.assertIn('data-provider-crest="provider-crest.png"', rendered)
+        self.assertIn("image fallback", rendered)
 
 
     def test_selected_league_loads_only_that_competition(self):
