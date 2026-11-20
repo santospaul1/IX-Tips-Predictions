@@ -45,6 +45,19 @@
 
   <h3 class="mb-4">Team Logos by Competition</h3>
 
+  <form method="get" class="mb-4 d-flex gap-2 align-items-end flex-wrap">
+    <div>
+      <label for="league-select" class="form-label">Select league</label>
+      <select id="league-select" name="league" class="form-select">
+        {% for code, name in competitions.items %}
+          <option value="{{ code }}" {% if code == selected_competition %}selected{% endif %}>{{ name }} ({{ code }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary">View logos</button>
+  </form>
+
+
   {% for group in preview_data %}
     <div class="comp-header">
       <img src="{{ group.logo }}" alt="{{ group.competition_code }}" class="comp-logo">
