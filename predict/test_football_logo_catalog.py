@@ -55,6 +55,11 @@ class FootballLogoCatalogTests(SimpleTestCase):
                 self.assertIsNotNone(url)
                 self.assertIn(expected_path, url)
 
+    def test_resolves_charleroi_alias_to_catalogue_crest(self):
+        url = get_football_team_logo_url("Charleroi", "BEL")
+        self.assertIsNotNone(url)
+        self.assertIn("/belgium/512x512/charleroi.", url)
+
     def test_uses_catalog_team_logo_when_provider_has_no_crest(self):
         with patch("predict.constants.cache.get", return_value={"shortName": "Liverpool FC", "crest": None}):
             with patch("predict.constants.cache.set"):
