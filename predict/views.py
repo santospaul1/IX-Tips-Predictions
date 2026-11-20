@@ -3327,14 +3327,19 @@ def ajax_league_table(request):
 
 
 def team_logos_preview(request):
-    """Show known teams per competition and the actual logo metadata resolved."""
+    """Show logo metadata for one selected competition to keep requests lightweight."""
+    selected_code = request.GET.get("league", "").strip().upper()
+    if selected_code not in competitions:
+        selected_code = next(iter(competitions), "")
+
     preview_data = []
-    for comp_code, comp_name in competitions.items():
+    comp_name = competitions.get(selected_code)
+    if selected_code and comp_name:
         teams_by_key = {}
         try:
-            standings = get_league_table(comp_code) or []
+            standings = get_league_table(selected_code) or []
         except Exception:
-            logger.exception("TEAM_LOGO_PREVIEW_STANDINGS_FAILED competition=%s", comp_code)
+            logger.exception("TEAM_LOGO_PREVIEW_STANDINGS_FAILED competition=%s", selected_code)
             standings = []
 
         for row in standings:
@@ -3343,8 +3348,8 @@ def team_logos_preview(request):
             if not name:
                 continue
             normalized = _normalize_team_lookup_value(name)
-            meta = get_team_metadata(name, comp_code) or {}
-            crest = meta.get("crest") or get_football_team_logo_url(name, comp_code) or static("logos/default.png")
+            meta = get_team_metadata(name, selected_code) or {}
+            crest = meta.get("crest") or get_football_team_logo_url(name, selected_code) or static("logos/default.png")
             teams_by_key[normalized] = {
                 "name": name,
                 "short": meta.get("shortName") or team_obj.get("shortName") or name,
@@ -3355,13 +3360,15 @@ def team_logos_preview(request):
 
         preview_data.append({
             "competition": comp_name,
-            "competition_code": comp_code,
-            "logo": resolve_competition_logo(comp_code),
+            "competition_code": selected_code,
+            "logo": resolve_competition_logo(selected_code),
             "teams": sorted(teams_by_key.values(), key=lambda team: team["name"].casefold()),
         })
 
     return render(request, "predict/team_logos_preview.html", {
-        "preview_data": preview_data
+        "preview_data": preview_data,
+        "competitions": competitions,
+        "selected_competition": selected_code,
     })
 
 
