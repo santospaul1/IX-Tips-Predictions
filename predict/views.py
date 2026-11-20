@@ -85,10 +85,18 @@ def resolve_competition_logo(competition_code):
     local_path = os.path.join(settings.BASE_DIR, "static", "logos", f"{competition_code}.png")
     if os.path.exists(local_path):
         return static(f"logos/{competition_code}.png")
+    # Prefer the bundled catalogue over stale cache entries (including old 256px URLs).
+    catalogue_logo = get_football_competition_logo_url(competition_code)
+    if catalogue_logo:
+        return catalogue_logo
+
     cached_meta = cache.get(f"competition_meta::{competition_code}", {})
-    if cached_meta.get("crest"):
-        return cached_meta["crest"]
-    return get_football_competition_logo_url(competition_code) or country_flag_url(competition_code)
+    cached_crest = cached_meta.get("crest") or ""
+    if cached_crest and not cached_crest.startswith("https://flagcdn.com/") and not (
+        "assets.football-logos.cc/logos/" in cached_crest and "/256x256/" in cached_crest
+    ):
+        return cached_crest
+    return country_flag_url(competition_code)
 
 
 # Map competition codes to The Odds API sport keys (extend as needed)
@@ -3342,20 +3350,37 @@ def team_logos_preview(request):
             logger.exception("TEAM_LOGO_PREVIEW_STANDINGS_FAILED competition=%s", selected_code)
             standings = []
 
+        # Standings can be empty for competitions whose provider has no table feed.
+        # Add persisted fixture participants so teams remain visible in this page.
+        team_sources = []
         for row in standings:
             team_obj = row.get("team") or {}
             name = team_obj.get("name") or team_obj.get("shortName")
-            if not name:
-                continue
+            if name:
+                team_sources.append((name, team_obj.get("shortName"), team_obj.get("crest") or ""))
+
+        fixture_names = set(
+            MatchPrediction.objects.filter(competition=selected_code).values_list("home_team", flat=True)
+        )
+        fixture_names.update(
+            MatchPrediction.objects.filter(competition=selected_code).values_list("away_team", flat=True)
+        )
+        known_names = {_normalize_team_lookup_value(item[0]) for item in team_sources}
+        for fixture_name in fixture_names:
+            if fixture_name and _normalize_team_lookup_value(fixture_name) not in known_names:
+                team_sources.append((fixture_name, fixture_name, ""))
+
+        for name, provider_short_name, provider_crest in team_sources:
             normalized = _normalize_team_lookup_value(name)
             meta = get_team_metadata(name, selected_code) or {}
             crest = meta.get("crest") or get_football_team_logo_url(name, selected_code) or static("logos/default.png")
             teams_by_key[normalized] = {
                 "name": name,
-                "short": meta.get("shortName") or team_obj.get("shortName") or name,
+                "short": meta.get("shortName") or provider_short_name or name,
                 "crest": crest,
-                "logo_source": meta.get("logo_source") or ("provider" if team_obj.get("crest") else "catalogue/fallback"),
-                "provider_crest": team_obj.get("crest") or "",
+                "logo_source": meta.get("logo_source") or ("provider" if provider_crest else "catalogue/fallback"),
+                "provider_crest": provider_crest,
+                "flag_crest": country_flag_url(selected_code) or "",
             }
 
         preview_data.append({
