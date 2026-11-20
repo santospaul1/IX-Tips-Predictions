@@ -67,11 +67,11 @@
       {% for team in group.teams %}
         <div class="col-md-4">
           <div class="team-box">
-            <img src="{{ team.crest }}" class="team-logo" alt="{{ team.short }}">
+            <img src="{{ team.crest }}" class="team-logo js-team-logo-fallback" alt="{{ team.short }}" data-provider-crest="{{ team.provider_crest }}" data-flag-crest="{{ team.flag_crest }}">
             <div class="logo-meta">
             <strong>{{ team.short }}</strong>
             <small class="d-block text-muted">{{ team.name }}</small>
-            <small class="d-block">Source: {{ team.logo_source }}</small>
+            <small class="d-block">Source: <span class="js-logo-source">{{ team.logo_source }}</span></small>
             <small class="d-block text-muted text-break">Resolved: {{ team.crest }}</small>
             {% if team.provider_crest %}<small class="d-block text-muted text-break">Provider: {{ team.provider_crest }}</small>{% endif %}
           </div>
@@ -82,6 +82,33 @@
   {% endfor %}
 
 </div>
+
+<script>
+  // If the catalogue URL returns 404, try the provider badge, then the flag.
+  document.querySelectorAll(".js-team-logo-fallback").forEach((img) => {
+    img.addEventListener("error", () => {
+      const source = img.closest(".team-box")?.querySelector(".js-logo-source");
+      const provider = img.dataset.providerCrest;
+      const flag = img.dataset.flagCrest;
+      const current = img.getAttribute("src");
+      if (provider && provider !== current && img.dataset.fallbackStage !== "provider") {
+        img.dataset.fallbackStage = "provider";
+        img.src = provider;
+        if (source) source.textContent = "provider (image fallback)";
+        return;
+      }
+      if (flag && flag !== current && img.dataset.fallbackStage !== "flag") {
+        img.dataset.fallbackStage = "flag";
+        img.src = flag;
+        if (source) source.textContent = "competition-country-flag (image fallback)";
+        return;
+      }
+      img.onerror = null;
+      img.src = "{% static 'logos/default.png' %}";
+      if (source) source.textContent = "default";
+    });
+  });
+</script>
 
 {% endblock content %}
 
