@@ -98,4 +98,6 @@ class CompetitionTeamDiscoveryTests(APITestCase):
 
         response = self.client.get(self.url, {"competition": "PL"})
 
-        self.assertEqual(response.status_code, 401)
+        # SessionAuthentication does not issue an HTTP authentication
+        # challenge, so DRF correctly returns 403 for an anonymous request.
+        self.assertEqual(response.status_code, 403)
