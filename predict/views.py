@@ -275,6 +275,26 @@ def refresh_prediction_statuses(competition_code, match_date, force=False):
     if not force and cache.get(refresh_key):
         return 0
 
+    # A short-lived distributed lock prevents overlapping workers from querying
+    # every result provider for the same competition/date at the same time.
+    # The normal five-minute refresh cache remains responsible for throttling
+    # sequential runs; this lock only closes the concurrent-worker race.
+    refresh_lock_key = f"{refresh_key}:lock"
+    try:
+        lock_acquired = cache.add(refresh_lock_key, True, timeout=120)
+    except Exception as exc:
+        logger.warning(
+            "Result refresh lock unavailable for %s on %s; continuing without lock: %s",
+            competition_code, match_date_str, exc,
+        )
+        lock_acquired = True
+    if not lock_acquired:
+        logger.info(
+            "Skipping overlapping result refresh for %s on %s",
+            competition_code, match_date_str,
+        )
+        return 0
+
     prediction_rows = list(MatchPrediction.objects.filter(
         competition=competition_code,
         match_date=match_date_str,
