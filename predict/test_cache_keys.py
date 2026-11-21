@@ -23,3 +23,21 @@ class FixtureMetadataCacheKeyTests(SimpleTestCase):
         first = CacheKeys.fixture_meta("PL", "2026-12-12", "Liverpool FC", "Leeds United FC")
         second = CacheKeys.fixture_meta("PL", "2026-12-12", "Liverpool FC", "Chelsea FC")
         self.assertNotEqual(first, second)
+
+
+
+class ResultRefreshLockTests(SimpleTestCase):
+    def test_overlapping_refresh_returns_before_database_or_provider_work(self):
+        from unittest.mock import patch
+
+        from predict.views import refresh_prediction_statuses
+
+        with (
+            patch("predict.views.cache.get", return_value=None),
+            patch("predict.views.cache.add", return_value=False),
+            patch("predict.views.MatchPrediction.objects.filter") as prediction_filter,
+        ):
+            updated = refresh_prediction_statuses("EPL", "2026-11-21")
+
+        self.assertEqual(updated, 0)
+        prediction_filter.assert_not_called()
